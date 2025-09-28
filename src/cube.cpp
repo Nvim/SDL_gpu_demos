@@ -4,6 +4,7 @@
 #include <SDL3/SDL_gpu.h>
 #include <SDL3/SDL_log.h>
 #include <SDL3/SDL_stdinc.h>
+#include <cassert>
 #include <imgui/backends/imgui_impl_sdl3.h>
 #include <imgui/backends/imgui_impl_sdlgpu3.h>
 #include <imgui/imgui.h>
@@ -79,6 +80,8 @@ CubeProgram::~CubeProgram()
 {
   LOG_TRACE("Destroying app");
 
+  // TODO: segfaults:
+  // loader_.Release();
   RELEASE_IF(vertex_, SDL_ReleaseGPUShader);
   RELEASE_IF(fragment_, SDL_ReleaseGPUShader);
   RELEASE_IF(scene_pipeline_, SDL_ReleaseGPUGraphicsPipeline);
@@ -186,12 +189,12 @@ CubeProgram::Init()
   }
   LOG_DEBUG("Created pipelines");
 
-  if (!loader.Load()) {
+  if (!loader_.Load()) {
     LOG_CRITICAL("Couldn't initialize GLTF loader");
     return false;
   }
-  LOG_INFO("Loaded {} meshes", loader.Meshes().size());
-  assert(!loader.Meshes().empty());
+  LOG_INFO("Loaded {} meshes", loader_.Meshes().size());
+  assert(!loader_.Meshes().empty());
 
   if (!SendVertexData()) {
     LOG_ERROR("Couldn't send vertex data!");
@@ -295,16 +298,22 @@ CubeProgram::Draw()
   }
 
   UpdateScene(); // TODO: move out
-  assert(textures_[0] != nullptr && samplers_[0] != nullptr);
-  static SDL_GPUTextureSamplerBinding sampler_bind{ textures_[0],
-                                                    samplers_[0] };
+  auto textures = loader_.Textures();
+  auto samplers = loader_.Samplers();
+  assert(textures.size() != 0 && textures[0] != nullptr);
+  assert(samplers.size() != 0 && samplers[0] != nullptr);
+  auto idx = 0;
+  if (tex_idx < (i32)textures.size()) {
+    idx = tex_idx;
+  }
+  SDL_GPUTextureSamplerBinding sampler_bind{ textures[idx], samplers[0] };
   auto vp = camera_.Projection() * camera_.View();
   MatricesBinding mvp{ vp, cube_transform_.Matrix() };
   auto cameraModel = camera_.Model();
   auto draw_data = DrawGui();
   auto d = instance_cfg.dimension;
   auto total_instances = d * d * d;
-  auto& mesh = loader.Meshes()[0];
+  auto& mesh = loader_.Meshes()[0];
   auto idx_count = mesh.indices_.size();
 
   ImGui_ImplSDLGPU3_PrepareDrawData(draw_data, cmdbuf);
@@ -373,69 +382,70 @@ CubeProgram::LoadTextures()
 {
   LOG_TRACE("CubeProgram::LoadTextures");
   // auto img = LoadImage("resources/textures/grass.png");
-  auto img = loader.Surfaces()[0];
-  if (!img) {
-    LOG_ERROR("Couldn't load images");
-    return false;
-  }
-  samplers_ = std::vector<SDL_GPUSampler*>{};
-  textures_ = std::vector<SDL_GPUTexture*>{};
-  SDL_GPUSamplerCreateInfo sampler_info{};
-  {
-    sampler_info.min_filter = SDL_GPU_FILTER_NEAREST;
-    sampler_info.mag_filter = SDL_GPU_FILTER_NEAREST;
-    sampler_info.mipmap_mode = SDL_GPU_SAMPLERMIPMAPMODE_NEAREST;
-    sampler_info.address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
-    sampler_info.address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
-    sampler_info.address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
-  }
-  samplers_.push_back(SDL_CreateGPUSampler(Device, &sampler_info));
-
-  SDL_GPUTextureCreateInfo tex_info{};
-  {
-    tex_info.type = SDL_GPU_TEXTURETYPE_2D;
-    tex_info.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
-    tex_info.width = static_cast<Uint32>(img->w);
-    tex_info.height = static_cast<Uint32>(img->h);
-    tex_info.layer_count_or_depth = 1;
-    tex_info.num_levels = 1;
-    tex_info.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER;
-  }
-  textures_.push_back(SDL_CreateGPUTexture(Device, &tex_info));
-
-  SDL_GPUTransferBufferCreateInfo tr_info{};
-  {
-    tr_info.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
-    tr_info.size = (Uint32)img->w * (Uint32)img->h * 4;
-  };
-  SDL_GPUTransferBuffer* trBuf = SDL_CreateGPUTransferBuffer(Device, &tr_info);
-
-  void* textureTransferPtr = SDL_MapGPUTransferBuffer(Device, trBuf, false);
-  SDL_memcpy(textureTransferPtr, img->pixels, img->w * img->h * 4);
-  SDL_UnmapGPUTransferBuffer(Device, trBuf);
-
-  SDL_GPUTextureTransferInfo tex_transfer_info{};
-  tex_transfer_info.transfer_buffer = trBuf;
-  tex_transfer_info.offset = 0;
-
-  SDL_GPUTextureRegion tex_reg{};
-  {
-    tex_reg.texture = textures_[0];
-    tex_reg.w = (Uint32)img->w;
-    tex_reg.h = (Uint32)img->h;
-    tex_reg.d = 1;
-  }
-
-  {
-    SDL_GPUCommandBuffer* cmdBuf = SDL_AcquireGPUCommandBuffer(Device);
-    SDL_GPUCopyPass* copyPass = SDL_BeginGPUCopyPass(cmdBuf);
-    SDL_UploadToGPUTexture(copyPass, &tex_transfer_info, &tex_reg, false);
-
-    SDL_EndGPUCopyPass(copyPass);
-    SDL_SubmitGPUCommandBuffer(cmdBuf);
-    SDL_DestroySurface(img);
-    SDL_ReleaseGPUTransferBuffer(Device, trBuf);
-  }
+  // auto img = loader.Surfaces()[0];
+  // if (!img) {
+  //   LOG_ERROR("Couldn't load images");
+  //   return false;
+  // }
+  // samplers_ = std::vector<SDL_GPUSampler*>{};
+  // textures_ = std::vector<SDL_GPUTexture*>{};
+  // SDL_GPUSamplerCreateInfo sampler_info{};
+  // {
+  //   sampler_info.min_filter = SDL_GPU_FILTER_NEAREST;
+  //   sampler_info.mag_filter = SDL_GPU_FILTER_NEAREST;
+  //   sampler_info.mipmap_mode = SDL_GPU_SAMPLERMIPMAPMODE_NEAREST;
+  //   sampler_info.address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
+  //   sampler_info.address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
+  //   sampler_info.address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
+  // }
+  // samplers_.push_back(SDL_CreateGPUSampler(Device, &sampler_info));
+  //
+  // SDL_GPUTextureCreateInfo tex_info{};
+  // {
+  //   tex_info.type = SDL_GPU_TEXTURETYPE_2D;
+  //   tex_info.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
+  //   tex_info.width = static_cast<Uint32>(img->w);
+  //   tex_info.height = static_cast<Uint32>(img->h);
+  //   tex_info.layer_count_or_depth = 1;
+  //   tex_info.num_levels = 1;
+  //   tex_info.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER;
+  // }
+  // textures_.push_back(SDL_CreateGPUTexture(Device, &tex_info));
+  //
+  // SDL_GPUTransferBufferCreateInfo tr_info{};
+  // {
+  //   tr_info.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
+  //   tr_info.size = (Uint32)img->w * (Uint32)img->h * 4;
+  // };
+  // SDL_GPUTransferBuffer* trBuf = SDL_CreateGPUTransferBuffer(Device,
+  // &tr_info);
+  //
+  // void* textureTransferPtr = SDL_MapGPUTransferBuffer(Device, trBuf, false);
+  // SDL_memcpy(textureTransferPtr, img->pixels, img->w * img->h * 4);
+  // SDL_UnmapGPUTransferBuffer(Device, trBuf);
+  //
+  // SDL_GPUTextureTransferInfo tex_transfer_info{};
+  // tex_transfer_info.transfer_buffer = trBuf;
+  // tex_transfer_info.offset = 0;
+  //
+  // SDL_GPUTextureRegion tex_reg{};
+  // {
+  //   tex_reg.texture = textures_[0];
+  //   tex_reg.w = (Uint32)img->w;
+  //   tex_reg.h = (Uint32)img->h;
+  //   tex_reg.d = 1;
+  // }
+  //
+  // {
+  //   SDL_GPUCommandBuffer* cmdBuf = SDL_AcquireGPUCommandBuffer(Device);
+  //   SDL_GPUCopyPass* copyPass = SDL_BeginGPUCopyPass(cmdBuf);
+  //   SDL_UploadToGPUTexture(copyPass, &tex_transfer_info, &tex_reg, false);
+  //
+  //   SDL_EndGPUCopyPass(copyPass);
+  //   SDL_SubmitGPUCommandBuffer(cmdBuf);
+  //   SDL_DestroySurface(img);
+  //   SDL_ReleaseGPUTransferBuffer(Device, trBuf);
+  // }
 
   return true;
 }
@@ -444,7 +454,7 @@ bool
 CubeProgram::SendVertexData()
 {
   LOG_TRACE("CubeProgram::SendVertexData");
-  auto& mesh = loader.Meshes()[0];
+  auto& mesh = loader_.Meshes()[0];
   auto vert_count = mesh.vertices_.size();
   auto idx_count = mesh.indices_.size();
   LOG_DEBUG("Mesh has {} vertices and {} indices", vert_count, idx_count);
@@ -634,6 +644,7 @@ CubeProgram::DrawGui()
         ImGui::InputInt("Dimensions", (int*)&instance_cfg.dimension);
         ImGui::TreePop();
       }
+      ImGui::InputInt("Texture index", &tex_idx);
       ImGui::Checkbox("Wireframe", &wireframe_);
       ImGui::End();
     }

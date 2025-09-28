@@ -10,4 +10,8 @@ Logger::Init()
   logger_->set_pattern("[%H:%M:%S:%e][%^%l%$]: %v");
 }
 
-spdlog::logger& Logger::Get() { return *logger_; }
+spdlog::logger&
+Logger::Get()
+{
+  return *logger_;
+}

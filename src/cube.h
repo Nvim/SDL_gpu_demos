@@ -61,7 +61,11 @@ private:
   Transform cube_transform_;
   Camera camera_{ glm::radians(60.0f), 640 / 480.f, .1f, 100.f };
   Skybox skybox_{ "resources/textures/skybox", Window, Device };
-  GLTFLoader loader{"resources/models/BarramundiFishGLTF/BarramundiFish.gltf"};
+  GLTFLoader loader_{
+    this,
+    "resources/models/BarramundiFishGLTF/BarramundiFish.gltf"
+  };
+  // GLTFLoader loader_{this, "resources/models/BarramundiFish.glb"};
   const char* vertex_path_;
   const char* fragment_path_;
   const int vp_width_{ 640 };
@@ -71,13 +75,12 @@ private:
   Rotation rotations_[3]; // spin cube
   InstancingCfg instance_cfg{};
   bool wireframe_{ false };
+  i32 tex_idx{ 0 };
 
   // GPU Resources:
   SDL_GPUTexture* depth_target_{ nullptr };
   SDL_GPUTexture* color_target_{ nullptr };
   // TODO: store scene-related GPU Resources in GLTF scene class
-  std::vector<SDL_GPUTexture*> textures_; 
-  std::vector<SDL_GPUSampler*> samplers_;
   SDL_GPUShader* vertex_{ nullptr };
   SDL_GPUShader* fragment_{ nullptr };
   SDL_GPUGraphicsPipeline* scene_pipeline_{ nullptr };

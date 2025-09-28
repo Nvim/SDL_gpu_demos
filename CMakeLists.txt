@@ -15,6 +15,7 @@ find_package(SDL3_image REQUIRED)
 find_package(glm REQUIRED)
 find_package(simdjson REQUIRED)
 
+add_subdirectory(${PROJECT_SOURCE_DIR}/thirdparty)
 # Imgui
 add_library(imgui)
 target_include_directories(imgui PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/imgui")
@@ -52,4 +53,14 @@ target_sources(${PROJECT_NAME} PRIVATE ${SOURCES})
 target_include_directories(${PROJECT_NAME} PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty")
 
 target_compile_definitions(${PROJECT_NAME} PUBLIC GLM_FORCE_DEPTH_ZERO_TO_ONE)
-target_link_libraries(${PROJECT_NAME} PUBLIC SDL3_image::SDL3_image SDL3::SDL3 glm::glm imgui fastgltf spdlog::spdlog cxx_setup)
+
+target_link_libraries(${PROJECT_NAME} PUBLIC
+  SDL3_image::SDL3_image 
+  SDL3::SDL3
+  glm::glm 
+  imgui
+  fastgltf
+  spdlog::spdlog
+  stb::stb 
+  cxx_setup
+)

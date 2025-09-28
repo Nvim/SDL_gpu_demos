@@ -7,5 +7,5 @@ layout(set = 2, binding = 0) uniform sampler2D tex;
 
 void main()
 {
-    FragColor = texture(tex, uv);
+    FragColor = vec4(texture(tex, uv).rgb, 1.0f);
 }
