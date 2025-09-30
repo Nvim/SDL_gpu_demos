@@ -298,15 +298,12 @@ CubeProgram::Draw()
   }
 
   UpdateScene(); // TODO: move out
-  auto textures = loader_.Textures();
-  auto samplers = loader_.Samplers();
-  assert(textures.size() != 0 && textures[0] != nullptr);
-  assert(samplers.size() != 0 && samplers[0] != nullptr);
-  auto idx = 0;
-  if (tex_idx < (i32)textures.size()) {
-    idx = tex_idx;
-  }
-  SDL_GPUTextureSamplerBinding sampler_bind{ textures[idx], samplers[0] };
+  auto mats = loader_.Materials();
+  assert(!mats.empty() && mats[0] != nullptr);
+  auto tx = mats[0]->MetalRoughTexture;
+  auto s = mats[0]->MetalRoughSampler;
+  assert(tx && s);
+  SDL_GPUTextureSamplerBinding sampler_bind{ tx, s };
   auto vp = camera_.Projection() * camera_.View();
   MatricesBinding mvp{ vp, cube_transform_.Matrix() };
   auto cameraModel = camera_.Model();

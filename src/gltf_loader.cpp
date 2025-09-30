@@ -2,6 +2,7 @@
 #include "logger.h"
 #include <SDL3/SDL_error.h>
 #include <SDL3/SDL_gpu.h>
+#include <memory>
 #include <vector>
 
 #ifndef STB_IMAGE_IMPLEMENTATION
@@ -100,6 +101,11 @@ GLTFLoader::Samplers() const
 {
   return samplers_;
 }
+const std::vector<SharedPtr<PbrMaterial>>&
+GLTFLoader::Materials() const 
+{
+  return materials_;
+}
 
 bool
 GLTFLoader::Load()
@@ -163,6 +169,13 @@ GLTFLoader::Load()
   loaded_ = LoadImageData();
   if (!loaded_) {
     LOG_ERROR("Couldn't load images from GLTF");
+    return false;
+  }
+  LOG_DEBUG("Loaded GLTF images");
+
+  loaded_ = LoadMaterials();
+  if (!loaded_) {
+    LOG_ERROR("Couldn't load materials from GLTF");
     return false;
   }
   LOG_DEBUG("Loaded GLTF images");
@@ -256,13 +269,15 @@ bool
 GLTFLoader::LoadImageData()
 {
   LOG_TRACE("GLTFLoader::LoadImageData");
-  if (asset_.images.empty()) {
-    LOG_WARN("LoadImageData: GLTF has no images");
-    return false;
-  }
 
   textures_ = std::vector<SDL_GPUTexture*>{};
   textures_.reserve(asset_.textures.size());
+
+  if (asset_.images.empty()) {
+    LOG_WARN("LoadImageData: GLTF has no images");
+    textures_.push_back(default_texture_);
+    return true;
+  }
 
   u32 tex_idx =
     asset_.materials[0].pbrData.baseColorTexture.value().textureIndex;
@@ -464,7 +479,7 @@ GLTFLoader::LoadSamplers()
   samplers_.reserve(asset_.samplers.size());
 
   if (asset_.samplers.empty()) {
-    LOG_WARN("asset has no samplers. falling back to default");
+    LOG_WARN("GLTF asset has no samplers. falling back to default");
     samplers_.push_back(default_sampler_);
     return true;
   }
@@ -569,4 +584,66 @@ GLTFLoader::CreateDefaultTexture()
   }
 
   return true;
+}
+
+bool
+GLTFLoader::LoadMaterials()
+{
+  LOG_TRACE("GLTFLoader::LoadMaterials");
+  if (asset_.materials.size() == 0) {
+    LOG_WARN("No materials found in GLTF");
+    materials_.push_back(default_material_);
+    return true;
+  }
+  materials_ = std::vector<SharedPtr<PbrMaterial>>{};
+  materials_.reserve(asset_.materials.size());
+  for (auto& mat : asset_.materials) {
+    auto newMat = std::make_shared<PbrMaterial>();
+
+    { // factors
+      newMat->BaseColorFactor.x = mat.pbrData.baseColorFactor.x();
+      newMat->BaseColorFactor.y = mat.pbrData.baseColorFactor.y();
+      newMat->BaseColorFactor.z = mat.pbrData.baseColorFactor.z();
+      newMat->BaseColorFactor.w = mat.pbrData.baseColorFactor.w();
+      newMat->EmissiveFactor.x = mat.emissiveFactor.x();
+      newMat->EmissiveFactor.y = mat.emissiveFactor.y();
+      newMat->EmissiveFactor.z = mat.emissiveFactor.z();
+      newMat->MetallicFactor = mat.pbrData.metallicFactor;
+      newMat->RoughnessFactor = mat.pbrData.roughnessFactor;
+    }
+
+    if (mat.pbrData.baseColorTexture.has_value()) {
+      auto idx = mat.pbrData.baseColorTexture.value().textureIndex;
+      assert(idx < textures_.size());
+      newMat->BaseColorTexture = textures_[idx];
+
+      idx = asset_.textures[idx].samplerIndex.value_or(0);
+      assert(idx < samplers_.size());
+      newMat->BaseColorSampler = samplers_[idx];
+    }
+
+    if (mat.pbrData.metallicRoughnessTexture.has_value()) {
+      auto idx = mat.pbrData.metallicRoughnessTexture.value().textureIndex;
+      assert(idx < textures_.size());
+      newMat->MetalRoughTexture = textures_[idx];
+
+      idx = asset_.textures[idx].samplerIndex.value_or(0);
+      assert(idx < samplers_.size());
+      newMat->MetalRoughSampler = samplers_[idx];
+    }
+
+    materials_.push_back(newMat);
+  }
+  LOG_DEBUG("Loaded {} materials", materials_.size());
+  return true;
+}
+
+void
+GLTFLoader::CreateDefaultMaterial()
+{
+  LOG_TRACE("GLTFLoader::CreateDefaultMaterial");
+  if (default_material_.get() != nullptr) {
+    LOG_WARN("Re-creating default material");
+  }
+  default_material_ = std::make_shared<PbrMaterial>();
 }
