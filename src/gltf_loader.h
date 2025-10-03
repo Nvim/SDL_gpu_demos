@@ -12,7 +12,7 @@ struct Geometry
 {
   const std::size_t FirstIndex;
   const std::size_t VertexCount;
-  std::shared_ptr<PbrMaterial> material{nullptr};
+  std::shared_ptr<PbrMaterial> material{ nullptr };
 };
 struct LoadedImage
 {
@@ -27,7 +27,7 @@ struct MeshAsset
   std::vector<Geometry> Submeshes;
 
   // TODO: don't duplicate these, send them to GPU directly when loading
-  std::vector<PosUvVertex> vertices_{};
+  std::vector<PosNormalUvVertex> vertices_{};
   std::vector<u32> indices_{};
 };
 
@@ -72,7 +72,7 @@ private:
 
   SDL_GPUSampler* default_sampler_{ nullptr };
   SDL_GPUTexture* default_texture_{ nullptr };
-  SharedPtr<PbrMaterial>default_material_{ nullptr };
+  SharedPtr<PbrMaterial> default_material_{ nullptr };
 
   std::vector<MeshAsset> meshes_;
   std::vector<SDL_GPUTexture*> textures_;

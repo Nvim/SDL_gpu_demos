@@ -130,13 +130,17 @@ CubeProgram::Init()
       .offset = 0 },
     { .location = 1,
       .buffer_slot = 0,
+      .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3,
+      .offset = sizeof(float) * 3 },
+    { .location = 2,
+      .buffer_slot = 0,
       .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2,
-      .offset = sizeof(float) * 3 }
+      .offset = sizeof(float) * 6 }
   };
 
   SDL_GPUVertexBufferDescription vertex_desc[] = { {
     .slot = 0,
-    .pitch = sizeof(PosUvVertex),
+    .pitch = sizeof(PosNormalUvVertex),
     .input_rate = SDL_GPU_VERTEXINPUTRATE_VERTEX,
     .instance_step_rate = 0,
   } };
@@ -150,7 +154,7 @@ CubeProgram::Init()
       auto& state = pipelineCreateInfo.vertex_input_state;
       state.vertex_buffer_descriptions = vertex_desc;
       state.num_vertex_buffers = 1, state.vertex_attributes = vertex_attributes;
-      state.num_vertex_attributes = 2;
+      state.num_vertex_attributes = 3;
     }
     {
       auto& state = pipelineCreateInfo.rasterizer_state;
@@ -300,13 +304,14 @@ CubeProgram::Draw()
   UpdateScene(); // TODO: move out
   auto mats = loader_.Materials();
   assert(!mats.empty() && mats[0] != nullptr);
-  auto tx = mats[0]->MetalRoughTexture;
-  auto s = mats[0]->MetalRoughSampler;
-  assert(tx && s);
-  SDL_GPUTextureSamplerBinding sampler_bind{ tx, s };
+  SDL_GPUTextureSamplerBinding samplers[] = {
+    { mats[0]->BaseColorTexture, mats[0]->BaseColorSampler },
+    { mats[0]->NormalTexture, mats[0]->NormalSampler },
+    { mats[0]->MetalRoughTexture, mats[0]->MetalRoughSampler },
+  };
   auto vp = camera_.Projection() * camera_.View();
   MatricesBinding mvp{ vp, cube_transform_.Matrix() };
-  auto cameraModel = camera_.Model();
+  CameraBinding cam{ camera_.Model(), glm::vec4{ camera_.Position, 0.f } };
   auto draw_data = DrawGui();
   auto d = instance_cfg.dimension;
   auto total_instances = d * d * d;
@@ -320,7 +325,7 @@ CubeProgram::Draw()
     scene_color_target_info_.texture = color_target_;
     scene_depth_target_info_.texture = depth_target_;
     SDL_PushGPUVertexUniformData(cmdbuf, 0, &mvp, sizeof(mvp));
-    SDL_PushGPUVertexUniformData(cmdbuf, 1, &cameraModel, sizeof(cameraModel));
+    SDL_PushGPUVertexUniformData(cmdbuf, 1, &cam, sizeof(cam));
     SDL_PushGPUVertexUniformData(
       cmdbuf, 2, &instance_cfg, sizeof(instance_cfg));
 
@@ -334,7 +339,7 @@ CubeProgram::Draw()
     SDL_BindGPUVertexBuffers(scenePass, 0, &vBinding, 1);
     SDL_BindGPUIndexBuffer(
       scenePass, &iBinding, SDL_GPU_INDEXELEMENTSIZE_16BIT);
-    SDL_BindGPUFragmentSamplers(scenePass, 0, &sampler_bind, 1);
+    SDL_BindGPUFragmentSamplers(scenePass, 0, samplers, 3);
     SDL_DrawGPUIndexedPrimitives(
       scenePass, idx_count, total_instances, 0, 0, 0);
 
@@ -366,7 +371,9 @@ CubeProgram::LoadShaders()
     LOG_ERROR("Couldn't load vertex shader at path {}", vertex_path_);
     return false;
   }
-  fragment_ = LoadShader(fragment_path_, Device, 1, 1, 0, 0);
+  // assert(loader_.Samplers().size() == loader_.Textures().size());
+  // assert(loader_.Samplers().size() == 3);
+  fragment_ = LoadShader(fragment_path_, Device, 3, 0, 0, 0);
   if (fragment_ == nullptr) {
     LOG_ERROR("Couldn't load fragment shader at path {}", fragment_path_);
     return false;
@@ -459,7 +466,7 @@ CubeProgram::SendVertexData()
   SDL_GPUBufferCreateInfo vertInfo{};
   {
     vertInfo.usage = SDL_GPU_BUFFERUSAGE_VERTEX;
-    vertInfo.size = static_cast<Uint32>(sizeof(PosUvVertex) * vert_count);
+    vertInfo.size = static_cast<Uint32>(sizeof(PosNormalUvVertex) * vert_count);
   }
 
   SDL_GPUBufferCreateInfo idxInfo{};
@@ -470,7 +477,8 @@ CubeProgram::SendVertexData()
 
   SDL_GPUTransferBufferCreateInfo transferInfo{};
   {
-    Uint32 sz = sizeof(PosUvVertex) * vert_count + sizeof(Uint16) * idx_count;
+    Uint32 sz =
+      sizeof(PosNormalUvVertex) * vert_count + sizeof(Uint16) * idx_count;
     transferInfo.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
     transferInfo.size = sz;
   }
@@ -486,8 +494,8 @@ CubeProgram::SendVertexData()
   }
 
   // Transfer Buffer to send vertex data to GPU
-  PosUvVertex* transferData =
-    (PosUvVertex*)SDL_MapGPUTransferBuffer(Device, transferBuffer, false);
+  PosNormalUvVertex* transferData =
+    (PosNormalUvVertex*)SDL_MapGPUTransferBuffer(Device, transferBuffer, false);
   if (!transferData) {
     LOG_ERROR("couldn't get mapping for transfer buffer");
     return false;
@@ -516,11 +524,11 @@ CubeProgram::SendVertexData()
                                           .offset = 0 };
   SDL_GPUBufferRegion reg = { .buffer = vbuffer_,
                               .offset = 0,
-                              .size = static_cast<Uint32>(sizeof(PosUvVertex) *
-                                                          vert_count) };
+                              .size = static_cast<Uint32>(
+                                sizeof(PosNormalUvVertex) * vert_count) };
   SDL_UploadToGPUBuffer(copyPass, &trLoc, &reg, false);
 
-  trLoc.offset = sizeof(PosUvVertex) * vert_count;
+  trLoc.offset = sizeof(PosNormalUvVertex) * vert_count;
   reg.buffer = ibuffer_;
   reg.size = sizeof(Uint16) * idx_count;
 

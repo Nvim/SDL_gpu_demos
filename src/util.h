@@ -1,6 +1,8 @@
 #pragma once
 
 #include <SDL3/SDL_gpu.h>
+#include <glm/vec2.hpp>
+#include <glm/vec3.hpp>
 
 struct PosVertex
 {
@@ -16,6 +18,13 @@ struct PosUvVertex
 {
   float pos[3];
   float uv[2];
+};
+
+struct PosNormalUvVertex
+{
+  float pos[3];
+  float normal[3]{ 0.f };
+  float uv[2]{ 0.f };
 };
 
 #define RELEASE_IF(ptr, release_func)                                          \

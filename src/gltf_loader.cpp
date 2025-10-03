@@ -102,7 +102,7 @@ GLTFLoader::Samplers() const
   return samplers_;
 }
 const std::vector<SharedPtr<PbrMaterial>>&
-GLTFLoader::Materials() const 
+GLTFLoader::Materials() const
 {
   return materials_;
 }
@@ -228,12 +228,10 @@ GLTFLoader::LoadVertexData()
 
         fastgltf::iterateAccessorWithIndex<glm::vec3>(
           asset_, posAccessor, [&](glm::vec3 v, size_t index) {
-            PosUvVertex newvtx;
+            PosNormalUvVertex newvtx;
             newvtx.pos[0] = v.x;
             newvtx.pos[1] = v.y;
             newvtx.pos[2] = v.z;
-            newvtx.uv[0] = 0;
-            newvtx.uv[1] = 0;
             vertices[initial_vtx + index] = newvtx;
           });
       }
@@ -247,6 +245,20 @@ GLTFLoader::LoadVertexData()
             [&](glm::vec2 v, size_t index) {
               vertices[initial_vtx + index].uv[0] = v.x;
               vertices[initial_vtx + index].uv[1] = v.y;
+            });
+        }
+      }
+
+      { // load normals:
+        auto attr = p.findAttribute("NORMAL");
+        if (attr != p.attributes.end()) {
+          fastgltf::iterateAccessorWithIndex<glm::vec3>(
+            asset_,
+            asset_.accessors[(*attr).accessorIndex],
+            [&](glm::vec3 v, size_t index) {
+              vertices[initial_vtx + index].normal[0] = v.x;
+              vertices[initial_vtx + index].normal[1] = v.y;
+              vertices[initial_vtx + index].normal[2] = v.z;
             });
         }
       }
@@ -612,6 +624,7 @@ GLTFLoader::LoadMaterials()
       newMat->RoughnessFactor = mat.pbrData.roughnessFactor;
     }
 
+    // TODO: mark which "features" are present with flags read from shader
     if (mat.pbrData.baseColorTexture.has_value()) {
       auto idx = mat.pbrData.baseColorTexture.value().textureIndex;
       assert(idx < textures_.size());
@@ -630,6 +643,16 @@ GLTFLoader::LoadMaterials()
       idx = asset_.textures[idx].samplerIndex.value_or(0);
       assert(idx < samplers_.size());
       newMat->MetalRoughSampler = samplers_[idx];
+    }
+
+    if (mat.normalTexture.has_value()) {
+      auto idx = mat.normalTexture.value().textureIndex;
+      assert(idx < textures_.size());
+      newMat->NormalTexture = textures_[idx];
+
+      idx = asset_.textures[idx].samplerIndex.value_or(0);
+      assert(idx < samplers_.size());
+      newMat->NormalSampler = samplers_[idx];
     }
 
     materials_.push_back(newMat);

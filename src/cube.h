@@ -25,6 +25,12 @@ struct MatricesBinding
   // glm::mat4 cameraModel;
 };
 
+struct CameraBinding
+{
+  glm::mat4 cameraMatrix;
+  glm::vec3 cameraPos;
+};
+
 struct InstancingCfg
 {
   float spread = 5.f;   // gap between each mesh instance

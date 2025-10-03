@@ -8,10 +8,10 @@
 struct PbrMaterial
 {
   // factors:
-  glm::vec4 BaseColorFactor{1.f};
-  glm::vec4 EmissiveFactor{1.f};
-  f32 MetallicFactor{1.f};
-  f32 RoughnessFactor{1.f};
+  glm::vec4 BaseColorFactor{ 1.f };
+  glm::vec4 EmissiveFactor{ 1.f };
+  f32 MetallicFactor{ 1.f };
+  f32 RoughnessFactor{ 1.f };
 
   // GPU resources:
   SDL_GPUTexture* BaseColorTexture{ nullptr };
@@ -19,6 +19,9 @@ struct PbrMaterial
 
   SDL_GPUTexture* MetalRoughTexture{ nullptr };
   SDL_GPUSampler* MetalRoughSampler{ nullptr };
+
+  SDL_GPUTexture* NormalTexture{ nullptr };
+  SDL_GPUSampler* NormalSampler{ nullptr };
 
   // SDL_GPUGraphicsPipeline* pipeline{ nullptr };
 };
