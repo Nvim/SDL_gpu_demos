@@ -88,8 +88,8 @@ CubeProgram::~CubeProgram()
   RELEASE_IF(scene_wireframe_pipeline_, SDL_ReleaseGPUGraphicsPipeline);
   RELEASE_IF(depth_target_, SDL_ReleaseGPUTexture);
   RELEASE_IF(color_target_, SDL_ReleaseGPUTexture);
-  RELEASE_IF(vbuffer_, SDL_ReleaseGPUBuffer);
-  RELEASE_IF(ibuffer_, SDL_ReleaseGPUBuffer);
+  // RELEASE_IF(vbuffer_, SDL_ReleaseGPUBuffer);
+  // RELEASE_IF(ibuffer_, SDL_ReleaseGPUBuffer);
 
   LOG_DEBUG("Released GPU Resources");
 
@@ -197,20 +197,8 @@ CubeProgram::Init()
     LOG_CRITICAL("Couldn't initialize GLTF loader");
     return false;
   }
-  LOG_INFO("Loaded {} meshes", loader_.Meshes().size());
   assert(!loader_.Meshes().empty());
-
-  if (!SendVertexData()) {
-    LOG_ERROR("Couldn't send vertex data!");
-    return false;
-  }
-  LOG_DEBUG("Sent vertex data to GPU");
-
-  if (!LoadTextures()) {
-    LOG_ERROR("Couldn't load textures!");
-    return false;
-  }
-  LOG_DEBUG("Loaded textures");
+  LOG_INFO("Loaded {} meshes", loader_.Meshes().size());
 
   if (!CreateSceneRenderTargets()) {
     LOG_ERROR("Couldn't create render target textures!");
@@ -219,7 +207,7 @@ CubeProgram::Init()
   LOG_DEBUG("Created render target textures");
 
   cube_transform_.translation_ = { 0.f, 0.f, 0.0f };
-  cube_transform_.scale_ = { 12.f, 12.f, 12.f };
+  cube_transform_.scale_ = { 5.f, 5.f, 5.f };
 
   camera_.Position = glm::vec3{ 0.f, 1.f, -4.f };
   camera_.Target = glm::vec3{ 0.f, 0.f, 0.f };
@@ -281,8 +269,6 @@ CubeProgram::Draw()
   static const SDL_GPUViewport scene_vp{
     0, 0, float(vp_width_), float(vp_height_), 0.1f, 1.0f
   };
-  static const SDL_GPUBufferBinding vBinding{ vbuffer_, 0 };
-  static const SDL_GPUBufferBinding iBinding{ ibuffer_, 0 };
 
   SDL_GPUCommandBuffer* cmdbuf = SDL_AcquireGPUCommandBuffer(Device);
   if (cmdbuf == NULL) {
@@ -302,21 +288,13 @@ CubeProgram::Draw()
   }
 
   UpdateScene(); // TODO: move out
-  auto mats = loader_.Materials();
-  assert(!mats.empty() && mats[0] != nullptr);
-  SDL_GPUTextureSamplerBinding samplers[] = {
-    { mats[0]->BaseColorTexture, mats[0]->BaseColorSampler },
-    { mats[0]->NormalTexture, mats[0]->NormalSampler },
-    { mats[0]->MetalRoughTexture, mats[0]->MetalRoughSampler },
-  };
   auto vp = camera_.Projection() * camera_.View();
   MatricesBinding mvp{ vp, cube_transform_.Matrix() };
   CameraBinding cam{ camera_.Model(), glm::vec4{ camera_.Position, 0.f } };
   auto draw_data = DrawGui();
   auto d = instance_cfg.dimension;
   auto total_instances = d * d * d;
-  auto& mesh = loader_.Meshes()[0];
-  auto idx_count = mesh.indices_.size();
+  // auto idx_count = mesh.indices_.size();
 
   ImGui_ImplSDLGPU3_PrepareDrawData(draw_data, cmdbuf);
 
@@ -336,12 +314,32 @@ CubeProgram::Draw()
 
     SDL_BindGPUGraphicsPipeline(
       scenePass, wireframe_ ? scene_wireframe_pipeline_ : scene_pipeline_);
-    SDL_BindGPUVertexBuffers(scenePass, 0, &vBinding, 1);
-    SDL_BindGPUIndexBuffer(
-      scenePass, &iBinding, SDL_GPU_INDEXELEMENTSIZE_16BIT);
-    SDL_BindGPUFragmentSamplers(scenePass, 0, samplers, 3);
-    SDL_DrawGPUIndexedPrimitives(
-      scenePass, idx_count, total_instances, 0, 0, 0);
+
+    for (const auto& mesh : loader_.Meshes()) {
+
+      assert(mesh.VertexBuffer() != nullptr);
+      assert(mesh.IndexBuffer() != nullptr);
+
+      const SDL_GPUBufferBinding vBinding{ mesh.VertexBuffer(), 0 };
+      const SDL_GPUBufferBinding iBinding{ mesh.IndexBuffer(), 0 };
+
+      SDL_BindGPUVertexBuffers(scenePass, 0, &vBinding, 1);
+      SDL_BindGPUIndexBuffer(
+        scenePass, &iBinding, SDL_GPU_INDEXELEMENTSIZE_32BIT);
+
+      for (const auto& submesh : mesh.Submeshes) {
+        auto material = submesh.material;
+        SDL_GPUTextureSamplerBinding sampler{ material->BaseColorTexture,
+                                              material->BaseColorSampler };
+        SDL_BindGPUFragmentSamplers(scenePass, 0, &sampler, 1);
+        SDL_DrawGPUIndexedPrimitives(scenePass,
+                                     submesh.VertexCount,
+                                     total_instances,
+                                     submesh.FirstIndex,
+                                     0,
+                                     0);
+      }
+    }
 
     skybox_.Draw(scenePass);
 
@@ -373,174 +371,11 @@ CubeProgram::LoadShaders()
   }
   // assert(loader_.Samplers().size() == loader_.Textures().size());
   // assert(loader_.Samplers().size() == 3);
-  fragment_ = LoadShader(fragment_path_, Device, 3, 0, 0, 0);
+  fragment_ = LoadShader(fragment_path_, Device, 1, 0, 0, 0);
   if (fragment_ == nullptr) {
     LOG_ERROR("Couldn't load fragment shader at path {}", fragment_path_);
     return false;
   }
-  return true;
-}
-
-bool
-CubeProgram::LoadTextures()
-{
-  LOG_TRACE("CubeProgram::LoadTextures");
-  // auto img = LoadImage("resources/textures/grass.png");
-  // auto img = loader.Surfaces()[0];
-  // if (!img) {
-  //   LOG_ERROR("Couldn't load images");
-  //   return false;
-  // }
-  // samplers_ = std::vector<SDL_GPUSampler*>{};
-  // textures_ = std::vector<SDL_GPUTexture*>{};
-  // SDL_GPUSamplerCreateInfo sampler_info{};
-  // {
-  //   sampler_info.min_filter = SDL_GPU_FILTER_NEAREST;
-  //   sampler_info.mag_filter = SDL_GPU_FILTER_NEAREST;
-  //   sampler_info.mipmap_mode = SDL_GPU_SAMPLERMIPMAPMODE_NEAREST;
-  //   sampler_info.address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
-  //   sampler_info.address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
-  //   sampler_info.address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
-  // }
-  // samplers_.push_back(SDL_CreateGPUSampler(Device, &sampler_info));
-  //
-  // SDL_GPUTextureCreateInfo tex_info{};
-  // {
-  //   tex_info.type = SDL_GPU_TEXTURETYPE_2D;
-  //   tex_info.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
-  //   tex_info.width = static_cast<Uint32>(img->w);
-  //   tex_info.height = static_cast<Uint32>(img->h);
-  //   tex_info.layer_count_or_depth = 1;
-  //   tex_info.num_levels = 1;
-  //   tex_info.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER;
-  // }
-  // textures_.push_back(SDL_CreateGPUTexture(Device, &tex_info));
-  //
-  // SDL_GPUTransferBufferCreateInfo tr_info{};
-  // {
-  //   tr_info.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
-  //   tr_info.size = (Uint32)img->w * (Uint32)img->h * 4;
-  // };
-  // SDL_GPUTransferBuffer* trBuf = SDL_CreateGPUTransferBuffer(Device,
-  // &tr_info);
-  //
-  // void* textureTransferPtr = SDL_MapGPUTransferBuffer(Device, trBuf, false);
-  // SDL_memcpy(textureTransferPtr, img->pixels, img->w * img->h * 4);
-  // SDL_UnmapGPUTransferBuffer(Device, trBuf);
-  //
-  // SDL_GPUTextureTransferInfo tex_transfer_info{};
-  // tex_transfer_info.transfer_buffer = trBuf;
-  // tex_transfer_info.offset = 0;
-  //
-  // SDL_GPUTextureRegion tex_reg{};
-  // {
-  //   tex_reg.texture = textures_[0];
-  //   tex_reg.w = (Uint32)img->w;
-  //   tex_reg.h = (Uint32)img->h;
-  //   tex_reg.d = 1;
-  // }
-  //
-  // {
-  //   SDL_GPUCommandBuffer* cmdBuf = SDL_AcquireGPUCommandBuffer(Device);
-  //   SDL_GPUCopyPass* copyPass = SDL_BeginGPUCopyPass(cmdBuf);
-  //   SDL_UploadToGPUTexture(copyPass, &tex_transfer_info, &tex_reg, false);
-  //
-  //   SDL_EndGPUCopyPass(copyPass);
-  //   SDL_SubmitGPUCommandBuffer(cmdBuf);
-  //   SDL_DestroySurface(img);
-  //   SDL_ReleaseGPUTransferBuffer(Device, trBuf);
-  // }
-
-  return true;
-}
-
-bool
-CubeProgram::SendVertexData()
-{
-  LOG_TRACE("CubeProgram::SendVertexData");
-  auto& mesh = loader_.Meshes()[0];
-  auto vert_count = mesh.vertices_.size();
-  auto idx_count = mesh.indices_.size();
-  LOG_DEBUG("Mesh has {} vertices and {} indices", vert_count, idx_count);
-
-  SDL_GPUBufferCreateInfo vertInfo{};
-  {
-    vertInfo.usage = SDL_GPU_BUFFERUSAGE_VERTEX;
-    vertInfo.size = static_cast<Uint32>(sizeof(PosNormalUvVertex) * vert_count);
-  }
-
-  SDL_GPUBufferCreateInfo idxInfo{};
-  {
-    idxInfo.usage = SDL_GPU_BUFFERUSAGE_INDEX;
-    idxInfo.size = static_cast<Uint32>(sizeof(Uint16) * idx_count);
-  }
-
-  SDL_GPUTransferBufferCreateInfo transferInfo{};
-  {
-    Uint32 sz =
-      sizeof(PosNormalUvVertex) * vert_count + sizeof(Uint16) * idx_count;
-    transferInfo.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
-    transferInfo.size = sz;
-  }
-
-  vbuffer_ = SDL_CreateGPUBuffer(Device, &vertInfo);
-  ibuffer_ = SDL_CreateGPUBuffer(Device, &idxInfo);
-  SDL_GPUTransferBuffer* transferBuffer =
-    SDL_CreateGPUTransferBuffer(Device, &transferInfo);
-
-  if (!vbuffer_ || !ibuffer_ || !transferBuffer) {
-    LOG_ERROR("couldn't create buffers");
-    return false;
-  }
-
-  // Transfer Buffer to send vertex data to GPU
-  PosNormalUvVertex* transferData =
-    (PosNormalUvVertex*)SDL_MapGPUTransferBuffer(Device, transferBuffer, false);
-  if (!transferData) {
-    LOG_ERROR("couldn't get mapping for transfer buffer");
-    return false;
-  }
-
-  for (u32 i = 0; i < vert_count; ++i) {
-    transferData[i] = mesh.vertices_[i];
-  }
-
-  Uint16* indexData = (Uint16*)&transferData[vert_count];
-  for (u32 i = 0; i < idx_count; ++i) {
-    indexData[i] = mesh.indices_[i];
-  }
-
-  SDL_UnmapGPUTransferBuffer(Device, transferBuffer);
-
-  // Upload the transfer data to the GPU resources
-  SDL_GPUCommandBuffer* uploadCmdBuf = SDL_AcquireGPUCommandBuffer(Device);
-  if (!uploadCmdBuf) {
-    LOG_ERROR("couldn't acquire command buffer");
-    return false;
-  }
-  SDL_GPUCopyPass* copyPass = SDL_BeginGPUCopyPass(uploadCmdBuf);
-
-  SDL_GPUTransferBufferLocation trLoc = { .transfer_buffer = transferBuffer,
-                                          .offset = 0 };
-  SDL_GPUBufferRegion reg = { .buffer = vbuffer_,
-                              .offset = 0,
-                              .size = static_cast<Uint32>(
-                                sizeof(PosNormalUvVertex) * vert_count) };
-  SDL_UploadToGPUBuffer(copyPass, &trLoc, &reg, false);
-
-  trLoc.offset = sizeof(PosNormalUvVertex) * vert_count;
-  reg.buffer = ibuffer_;
-  reg.size = sizeof(Uint16) * idx_count;
-
-  SDL_UploadToGPUBuffer(copyPass, &trLoc, &reg, false);
-
-  SDL_EndGPUCopyPass(copyPass);
-  if (!SDL_SubmitGPUCommandBuffer(uploadCmdBuf)) {
-    LOG_ERROR("couldn't submit copy pass command buffer");
-    return false;
-  }
-  SDL_ReleaseGPUTransferBuffer(Device, transferBuffer);
-
   return true;
 }
 

@@ -30,10 +30,16 @@ void main()
     norm = mat3(transpose(inverse(mvp.mat_m))) * inNormal;  
     ViewPos = camera_world.xyz;
 
+    vec4 relative_pos = mvp.mat_m * vec4(Pos, 1.0);
+    if (dimension == 1) {
+        FragPos = relative_pos.xyz;
+        gl_Position = mvp.mat_vp * relative_pos;
+        return;
+    }
+
     uint instance = gl_InstanceIndex;
     uint square = dimension * dimension;
 
-    vec4 relative_pos = mvp.mat_m * vec4(Pos, 1.0);
     relative_pos.x += float(instance % dimension) * spread;
     relative_pos.y += int(floor(float(instance / dimension))) % dimension * spread;
     relative_pos.z += floor(float(instance / square)) * spread;

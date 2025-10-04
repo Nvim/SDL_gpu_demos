@@ -34,7 +34,7 @@ struct CameraBinding
 struct InstancingCfg
 {
   float spread = 5.f;   // gap between each mesh instance
-  Uint32 dimension = 6; // instance count per side
+  Uint32 dimension = 1; // instance count per side
 };
 
 class CubeProgram : public Program
@@ -55,8 +55,6 @@ public:
 private:
   bool InitGui();
   bool LoadShaders();
-  bool LoadTextures();
-  bool SendVertexData();
   bool CreateSceneRenderTargets();
   ImDrawData* DrawGui();
   void UpdateScene();
@@ -67,11 +65,11 @@ private:
   Transform cube_transform_;
   Camera camera_{ glm::radians(60.0f), 640 / 480.f, .1f, 100.f };
   Skybox skybox_{ "resources/textures/skybox", Window, Device };
-  GLTFLoader loader_{
-    this,
-    "resources/models/BarramundiFishGLTF/BarramundiFish.gltf"
-  };
-  // GLTFLoader loader_{this, "resources/models/BarramundiFish.glb"};
+  // GLTFLoader loader_{
+  //   this,
+  //   "resources/models/BarramundiFishGLTF/BarramundiFish.gltf"
+  // };
+  GLTFLoader loader_{ this, "resources/models/BarramundiFish.glb" };
   const char* vertex_path_;
   const char* fragment_path_;
   const int vp_width_{ 640 };
@@ -91,8 +89,8 @@ private:
   SDL_GPUShader* fragment_{ nullptr };
   SDL_GPUGraphicsPipeline* scene_pipeline_{ nullptr };
   SDL_GPUGraphicsPipeline* scene_wireframe_pipeline_{ nullptr };
-  SDL_GPUBuffer* vbuffer_{ nullptr };
-  SDL_GPUBuffer* ibuffer_{ nullptr };
+  // SDL_GPUBuffer* vbuffer_{ nullptr };
+  // SDL_GPUBuffer* ibuffer_{ nullptr };
   SDL_GPUColorTargetInfo scene_color_target_info_{};
   SDL_GPUDepthStencilTargetInfo scene_depth_target_info_{};
   SDL_GPUColorTargetInfo swapchain_target_info_{};

@@ -29,7 +29,7 @@ target_sources(imgui PRIVATE
 "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/imgui/backends/imgui_impl_sdl3.cpp"
 )
 
-# Fastglft
+# Fastgltf
 set(FASTGLTF_COMPILE_AS_CPP20 YES CACHE "" BOOL)
 set(FASTGLTF_ENABLE_TESTS NO CACHE "" BOOL)
 set(FASTGLTF_ENABLE_EXAMPLES NO CACHE "" BOOL)

@@ -54,7 +54,7 @@ main()
     if (!app.Init()) {
       LOG_CRITICAL("Couldn't init app.");
     } else {
-
+      LOG_INFO("Entering main loop");
       while (!app.ShouldQuit()) {
         if (!app.Poll()) {
           LOG_CRITICAL("App failed to Poll");

@@ -73,11 +73,15 @@ GLTFLoader::Release()
 {
   LOG_TRACE("GLTFLoader::Release");
   auto Device = program_->Device;
-  for (auto tex : textures_) {
+  for (auto& tex : textures_) {
     RELEASE_IF(tex, SDL_ReleaseGPUTexture);
   }
-  for (auto sampler : samplers_) {
+  for (auto& sampler : samplers_) {
     RELEASE_IF(sampler, SDL_ReleaseGPUSampler);
+  }
+  for (auto& mesh : meshes_) {
+    RELEASE_IF(mesh.IndexBuffer(), SDL_ReleaseGPUBuffer);
+    RELEASE_IF(mesh.VertexBuffer(), SDL_ReleaseGPUBuffer);
   }
   RELEASE_IF(default_texture_, SDL_ReleaseGPUTexture);
   RELEASE_IF(default_sampler_, SDL_ReleaseGPUSampler);
@@ -152,13 +156,6 @@ GLTFLoader::Load()
 
   asset_ = std::move(asset.get());
 
-  loaded_ = LoadVertexData();
-  if (!loaded_) {
-    LOG_ERROR("Couldn't load vertex data from GLTF");
-    return false;
-  }
-  LOG_DEBUG("Loaded GLTF meshes");
-
   loaded_ = LoadSamplers();
   if (!loaded_) {
     LOG_ERROR("Couldn't load samplers from GLTF");
@@ -178,7 +175,14 @@ GLTFLoader::Load()
     LOG_ERROR("Couldn't load materials from GLTF");
     return false;
   }
-  LOG_DEBUG("Loaded GLTF images");
+  LOG_DEBUG("Loaded GLTF materials");
+
+  loaded_ = LoadVertexData();
+  if (!loaded_) {
+    LOG_ERROR("Couldn't load vertex data from GLTF");
+    return false;
+  }
+  LOG_DEBUG("Loaded GLTF meshes");
 
   return loaded_;
 }
@@ -195,12 +199,14 @@ GLTFLoader::LoadVertexData()
   // buffers
   meshes_ = std::vector<MeshAsset>{};
   meshes_.reserve(asset_.meshes.size());
+  std::vector<PosNormalUvVertex> vertices;
+  std::vector<u32> indices;
 
   for (auto& mesh : asset_.meshes) {
     MeshAsset newMesh;
     newMesh.Name = mesh.name.c_str();
-    auto& indices = newMesh.indices_;
-    auto& vertices = newMesh.vertices_;
+    vertices.clear();
+    indices.clear();
 
     for (auto&& p : mesh.primitives) {
       Geometry newGeometry{
@@ -241,7 +247,7 @@ GLTFLoader::LoadVertexData()
         if (attr != p.attributes.end()) {
           fastgltf::iterateAccessorWithIndex<glm::vec2>(
             asset_,
-            asset_.accessors[(*attr).accessorIndex],
+            asset_.accessors[attr->accessorIndex],
             [&](glm::vec2 v, size_t index) {
               vertices[initial_vtx + index].uv[0] = v.x;
               vertices[initial_vtx + index].uv[1] = v.y;
@@ -254,7 +260,7 @@ GLTFLoader::LoadVertexData()
         if (attr != p.attributes.end()) {
           fastgltf::iterateAccessorWithIndex<glm::vec3>(
             asset_,
-            asset_.accessors[(*attr).accessorIndex],
+            asset_.accessors[attr->accessorIndex],
             [&](glm::vec3 v, size_t index) {
               vertices[initial_vtx + index].normal[0] = v.x;
               vertices[initial_vtx + index].normal[1] = v.y;
@@ -263,17 +269,25 @@ GLTFLoader::LoadVertexData()
         }
       }
 
+      { // material:
+        if (p.materialIndex.has_value()) {
+          newGeometry.material = materials_[p.materialIndex.value()];
+        } else {
+          newGeometry.material = materials_[0];
+        }
+      }
+
       newMesh.Submeshes.push_back(newGeometry);
-      LOG_DEBUG("New geometry. Total Verts: {}, Total Indices: {} || {}, {}",
+      LOG_DEBUG("New geometry. Total Verts: {}, Total Indices: {}",
                 vertices.size(),
-                indices.size(),
-                newMesh.Submeshes[0].FirstIndex,
-                newMesh.Submeshes[0].VertexCount);
+                indices.size());
+    }
+    if (!UploadBuffers(&newMesh.Buffers, vertices, indices)) {
+      LOG_ERROR("Couldn't upload mesh data");
+      return false;
     }
     meshes_.emplace_back(newMesh);
-    assert(newMesh.indices_.size() != 0);
   }
-  assert(meshes_[0].indices_.size() != 0);
   return true;
 }
 
@@ -291,9 +305,6 @@ GLTFLoader::LoadImageData()
     return true;
   }
 
-  u32 tex_idx =
-    asset_.materials[0].pbrData.baseColorTexture.value().textureIndex;
-  assert(tex_idx == 0);
   for (auto& image : asset_.images) {
     LoadedImage imgData{};
     // clang-format off
