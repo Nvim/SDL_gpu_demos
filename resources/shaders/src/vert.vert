@@ -1,39 +1,35 @@
 #version 450 core
 
-layout(location = 0) in vec3 Pos;
+#extension GL_GOOGLE_include_directive : require
+#include "scene_data.glsl"
+
+layout(location = 0) in vec3 inPos;
 layout(location = 1) in vec3 inNormal;
 layout(location = 2) in vec2 inUv;
 
-layout(location = 0) out vec2 uv;
-layout(location = 1) out vec3 norm;
-layout(location = 2) out vec3 FragPos;
-layout(location = 3) out vec3 ViewPos;
+layout(location = 0) out vec2 outUv; // depends on vertex
+layout(location = 1) out vec3 outNormal; // depends on vertex
+layout(location = 2) out vec3 outFragPos; // depends on model matrix
 
-layout(std140, binding = 0, set = 1) uniform uMatrices {
-    mat4 mat_vp;
-    mat4 mat_m;
-} mvp;
-
-layout(std140, binding = 1, set = 1) uniform uCameraMatrix {
-    mat4 mat_cam;
-    vec4 camera_world;
+// Data global to whole scene (120 bytes data, 8 to pad)
+layout(std140, set = 1, binding = 0) uniform uSceneData {
+    SceneData scene;
 };
 
-layout(std140, binding = 2, set = 1) uniform uInstanceSettings {
-    float spread;
-    uint dimension;
+// Data specific to this draw call
+layout(std140, set = 1, binding = 1) uniform uDrawData {
+    mat4 mat_m;
 };
 
 void main()
 {
-    uv = inUv;
-    norm = mat3(transpose(inverse(mvp.mat_m))) * inNormal;  
-    ViewPos = camera_world.xyz;
+    outUv = inUv;
+    outNormal = mat3(transpose(inverse(mat_m))) * inNormal;
 
-    vec4 relative_pos = mvp.mat_m * vec4(Pos, 1.0);
+    vec4 relative_pos = mat_m * vec4(inPos, 1.0);
     if (dimension == 1) {
-        FragPos = relative_pos.xyz;
-        gl_Position = mvp.mat_vp * relative_pos;
+        outFragPos = relative_pos.xyz;
+        gl_Position = mat_viewproj * relative_pos;
         return;
     }
 
@@ -47,6 +43,6 @@ void main()
     relative_pos.x -= dimension * 2;
     relative_pos.y -= dimension * 2;
     relative_pos.z -= dimension * 2;
-    FragPos = relative_pos.xyz;
-    gl_Position = mvp.mat_vp * relative_pos;
+    outFragPos = relative_pos.xyz;
+    gl_Position = mat_viewproj * relative_pos;
 }

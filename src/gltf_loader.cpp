@@ -1,5 +1,6 @@
 #include "gltf_loader.h"
 #include "logger.h"
+#include "src/material.h"
 #include <SDL3/SDL_error.h>
 #include <SDL3/SDL_gpu.h>
 #include <memory>
@@ -636,6 +637,7 @@ GLTFLoader::LoadMaterials()
     }
 
     // TODO: mark which "features" are present with flags read from shader
+    // TODO: function for this
     if (mat.pbrData.baseColorTexture.has_value()) {
       auto idx = mat.pbrData.baseColorTexture.value().textureIndex;
       assert(idx < textures_.size());
@@ -644,6 +646,9 @@ GLTFLoader::LoadMaterials()
       idx = asset_.textures[idx].samplerIndex.value_or(0);
       assert(idx < samplers_.size());
       newMat->BaseColorSampler = samplers_[idx];
+      newMat->Samplers[(size_t)PbrMaterial::PbrTexture::BaseColor] =
+        SDL_GPUTextureSamplerBinding{ newMat->BaseColorTexture,
+                                      newMat->BaseColorSampler };
     }
 
     if (mat.pbrData.metallicRoughnessTexture.has_value()) {
@@ -654,6 +659,9 @@ GLTFLoader::LoadMaterials()
       idx = asset_.textures[idx].samplerIndex.value_or(0);
       assert(idx < samplers_.size());
       newMat->MetalRoughSampler = samplers_[idx];
+      newMat->Samplers[(size_t)PbrMaterial::PbrTexture::MetalRough] =
+        SDL_GPUTextureSamplerBinding{ newMat->MetalRoughTexture,
+                                      newMat->MetalRoughSampler };
     }
 
     if (mat.normalTexture.has_value()) {
@@ -664,6 +672,9 @@ GLTFLoader::LoadMaterials()
       idx = asset_.textures[idx].samplerIndex.value_or(0);
       assert(idx < samplers_.size());
       newMat->NormalSampler = samplers_[idx];
+      newMat->Samplers[(size_t)PbrMaterial::PbrTexture::Normal] =
+        SDL_GPUTextureSamplerBinding{ newMat->NormalTexture,
+                                      newMat->NormalSampler };
     }
 
     materials_.push_back(newMat);

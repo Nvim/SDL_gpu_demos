@@ -2,6 +2,7 @@
 
 #include "src/types.h"
 #include <SDL3/SDL_gpu.h>
+#include <array>
 #include <glm/vec4.hpp>
 
 // maps to the 'pbrMetallicRoughness' attr of GLTF material
@@ -22,6 +23,22 @@ struct PbrMaterial
 
   SDL_GPUTexture* NormalTexture{ nullptr };
   SDL_GPUSampler* NormalSampler{ nullptr };
+
+  enum class PbrTexture : size_t
+  {
+    BaseColor,
+    MetalRough,
+    Normal,
+    COUNT
+  };
+  std::array<SDL_GPUTextureSamplerBinding,
+             static_cast<size_t>(PbrTexture::COUNT)>
+    Samplers;
+  // {
+  //     SDL_GPUTextureSamplerBinding{ BaseColorTexture, BaseColorSampler },
+  //     SDL_GPUTextureSamplerBinding{ MetalRoughTexture, MetalRoughSampler },
+  //     SDL_GPUTextureSamplerBinding{ NormalTexture, NormalSampler },
+  //   };
 
   // SDL_GPUGraphicsPipeline* pipeline{ nullptr };
 };

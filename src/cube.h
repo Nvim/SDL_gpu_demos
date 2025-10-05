@@ -31,6 +31,30 @@ struct CameraBinding
   glm::vec3 cameraPos;
 };
 
+struct SceneDataBinding
+{
+  glm::mat4 viewproj;
+  glm::mat4 cam_model;
+  glm::vec4 camera_world;
+  glm::vec4 sun_dir;
+  glm::vec4 sun_color;
+  f32 spread;
+  u32 dimension;
+  f32 _pad[2] = {0.f};
+};
+
+struct DrawDataBinding
+{
+  glm::mat4 model;
+  // u32 material_index;
+};
+
+struct MaterialDataBinding
+{
+  glm::vec4 color_factors;
+  glm::vec4 metal_rough_factors;
+};
+
 struct InstancingCfg
 {
   float spread = 5.f;   // gap between each mesh instance
@@ -89,8 +113,6 @@ private:
   SDL_GPUShader* fragment_{ nullptr };
   SDL_GPUGraphicsPipeline* scene_pipeline_{ nullptr };
   SDL_GPUGraphicsPipeline* scene_wireframe_pipeline_{ nullptr };
-  // SDL_GPUBuffer* vbuffer_{ nullptr };
-  // SDL_GPUBuffer* ibuffer_{ nullptr };
   SDL_GPUColorTargetInfo scene_color_target_info_{};
   SDL_GPUDepthStencilTargetInfo scene_depth_target_info_{};
   SDL_GPUColorTargetInfo swapchain_target_info_{};

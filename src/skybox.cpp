@@ -100,7 +100,7 @@ bool
 Skybox::CreatePipeline()
 {
   LOG_TRACE("Skybox::CreatePipeline");
-  auto vert = LoadShader(VertPath, device_, 0, 2, 0, 0);
+  auto vert = LoadShader(VertPath, device_, 0, 1, 0, 0);
   if (vert == nullptr) {
     LOG_ERROR("Couldn't load vertex shader at path {}", VertPath);
     return false;

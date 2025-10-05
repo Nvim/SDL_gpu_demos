@@ -289,12 +289,18 @@ CubeProgram::Draw()
 
   UpdateScene(); // TODO: move out
   auto vp = camera_.Projection() * camera_.View();
-  MatricesBinding mvp{ vp, cube_transform_.Matrix() };
-  CameraBinding cam{ camera_.Model(), glm::vec4{ camera_.Position, 0.f } };
   auto draw_data = DrawGui();
   auto d = instance_cfg.dimension;
   auto total_instances = d * d * d;
-  // auto idx_count = mesh.indices_.size();
+  SceneDataBinding scene_data{ vp,
+                               camera_.Model(),
+                               glm::vec4{ camera_.Position, 0.f },
+                               glm::vec4{ 30.f, 20.f, 0.f, 0.f },
+                               glm::vec4{ .2f, .8f, .3f, 1.f },
+                               instance_cfg.spread,
+                               instance_cfg.dimension };
+  // TODO: this should be different for every mesh in hierarchy:
+  DrawDataBinding object_data{ cube_transform_.Matrix() };
 
   ImGui_ImplSDLGPU3_PrepareDrawData(draw_data, cmdbuf);
 
@@ -302,10 +308,8 @@ CubeProgram::Draw()
   {
     scene_color_target_info_.texture = color_target_;
     scene_depth_target_info_.texture = depth_target_;
-    SDL_PushGPUVertexUniformData(cmdbuf, 0, &mvp, sizeof(mvp));
-    SDL_PushGPUVertexUniformData(cmdbuf, 1, &cam, sizeof(cam));
-    SDL_PushGPUVertexUniformData(
-      cmdbuf, 2, &instance_cfg, sizeof(instance_cfg));
+    SDL_PushGPUVertexUniformData(cmdbuf, 0, &scene_data, sizeof(scene_data));
+    SDL_PushGPUFragmentUniformData(cmdbuf, 0, &scene_data, sizeof(scene_data));
 
     SDL_GPURenderPass* scenePass = SDL_BeginGPURenderPass(
       cmdbuf, &scene_color_target_info_, 1, &scene_depth_target_info_);
@@ -327,11 +331,22 @@ CubeProgram::Draw()
       SDL_BindGPUIndexBuffer(
         scenePass, &iBinding, SDL_GPU_INDEXELEMENTSIZE_32BIT);
 
+      // push mesh's mvp
+      SDL_PushGPUVertexUniformData(
+        cmdbuf, 1, &object_data, sizeof(object_data));
       for (const auto& submesh : mesh.Submeshes) {
+
+        // push submesh's material
         auto material = submesh.material;
-        SDL_GPUTextureSamplerBinding sampler{ material->BaseColorTexture,
-                                              material->BaseColorSampler };
-        SDL_BindGPUFragmentSamplers(scenePass, 0, &sampler, 1);
+        MaterialDataBinding m{ material->BaseColorFactor,
+                               glm::vec4{ material->MetallicFactor,
+                                          material->RoughnessFactor,
+                                          0.f,
+                                          0.f } };
+        SDL_PushGPUFragmentUniformData(cmdbuf, 1, &m, sizeof(m));
+
+        SDL_BindGPUFragmentSamplers(
+          scenePass, 0, material->Samplers.begin(), 3);
         SDL_DrawGPUIndexedPrimitives(scenePass,
                                      submesh.VertexCount,
                                      total_instances,
@@ -364,14 +379,14 @@ bool
 CubeProgram::LoadShaders()
 {
   LOG_TRACE("CubeProgram::LoadShaders");
-  vertex_ = LoadShader(vertex_path_, Device, 0, 3, 0, 0);
+  vertex_ = LoadShader(vertex_path_, Device, 0, 2, 0, 0);
   if (vertex_ == nullptr) {
     LOG_ERROR("Couldn't load vertex shader at path {}", vertex_path_);
     return false;
   }
   // assert(loader_.Samplers().size() == loader_.Textures().size());
   // assert(loader_.Samplers().size() == 3);
-  fragment_ = LoadShader(fragment_path_, Device, 1, 0, 0, 0);
+  fragment_ = LoadShader(fragment_path_, Device, 3, 2, 0, 0);
   if (fragment_ == nullptr) {
     LOG_ERROR("Couldn't load fragment shader at path {}", fragment_path_);
     return false;
