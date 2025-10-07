@@ -18,6 +18,7 @@
 
 #include "src/camera.h"
 #include "src/logger.h"
+#include "src/material.h"
 #include "util.h"
 
 CubeProgram::CubeProgram(SDL_GPUDevice* device,
@@ -207,7 +208,7 @@ CubeProgram::Init()
   LOG_DEBUG("Created render target textures");
 
   cube_transform_.translation_ = { 0.f, 0.f, 0.0f };
-  cube_transform_.scale_ = { 5.f, 5.f, 5.f };
+  cube_transform_.scale_ = { 1.f, 1.f, 1.f };
 
   camera_.Position = glm::vec3{ 0.f, 1.f, -4.f };
   camera_.Target = glm::vec3{ 0.f, 0.f, 0.f };
@@ -296,7 +297,7 @@ CubeProgram::Draw()
                                camera_.Model(),
                                glm::vec4{ camera_.Position, 0.f },
                                glm::vec4{ 30.f, 20.f, 0.f, 0.f },
-                               glm::vec4{ .2f, .8f, .3f, 1.f },
+                               glm::vec4{ .9f, .9f, .9f, 1.f },
                                instance_cfg.spread,
                                instance_cfg.dimension };
   // TODO: this should be different for every mesh in hierarchy:
@@ -341,12 +342,11 @@ CubeProgram::Draw()
         MaterialDataBinding m{ material->BaseColorFactor,
                                glm::vec4{ material->MetallicFactor,
                                           material->RoughnessFactor,
-                                          0.f,
+                                          static_cast<f32>(tex_idx),
                                           0.f } };
         SDL_PushGPUFragmentUniformData(cmdbuf, 1, &m, sizeof(m));
 
-        SDL_BindGPUFragmentSamplers(
-          scenePass, 0, material->Samplers.begin(), 3);
+        material->BindSamplers(scenePass);
         SDL_DrawGPUIndexedPrimitives(scenePass,
                                      submesh.VertexCount,
                                      total_instances,
@@ -384,9 +384,8 @@ CubeProgram::LoadShaders()
     LOG_ERROR("Couldn't load vertex shader at path {}", vertex_path_);
     return false;
   }
-  // assert(loader_.Samplers().size() == loader_.Textures().size());
-  // assert(loader_.Samplers().size() == 3);
-  fragment_ = LoadShader(fragment_path_, Device, 3, 2, 0, 0);
+  fragment_ =
+    LoadShader(fragment_path_, Device, PbrMaterial::TextureCount, 2, 0, 0);
   if (fragment_ == nullptr) {
     LOG_ERROR("Couldn't load fragment shader at path {}", fragment_path_);
     return false;

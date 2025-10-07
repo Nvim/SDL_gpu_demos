@@ -23,6 +23,10 @@ layout(set = 3, binding = 1) uniform uMaterialData {
     vec4 color_factors;
     vec4 metal_rough_factors;
 };
+// layout(std140, set = 1, binding = 1) uniform uDrawData {
+//     mat4 mat_m;
+//     uint mat_idx;
+// };
 
 struct {
     vec3 direction;
@@ -46,7 +50,18 @@ void main()
     // diffuse
     vec3 lightDir = normalize(SunLight.direction);
     float diff_fact = max(dot(norm, lightDir), 0.0);
-    vec3 diffuse = SunLight.diffuse * diff_fact * texture(TexDiffuse, inUv).rgb;
+    vec3 sampled;
+    if (metal_rough_factors.z == 0) {
+        sampled = texture(TexDiffuse, inUv).rgb;
+        // sampled = vec3(1.0, 0.0, 0.0);
+    } else if (metal_rough_factors.z == 1) {
+        sampled = texture(TexMetalRough, inUv).rgb;
+        // sampled = vec3(0.0, 1.0, 0.0);
+    } else {
+        sampled = texture(TexNormal, inUv).rgb;
+        // sampled = vec3(0.0, 0.0, 1.0);
+    }
+    vec3 diffuse = SunLight.diffuse * diff_fact * sampled;
 
     vec3 result = diffuse;
 

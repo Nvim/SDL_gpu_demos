@@ -5,9 +5,19 @@
 #include <array>
 #include <glm/vec4.hpp>
 
+enum class PbrTextureFlag : u8
+{
+  BaseColor = 0,
+  MetalRough = 1,
+  Normal = 2,
+  COUNT
+};
+#define CAST_FLAG(f) static_cast<u8>(f)
+
 // maps to the 'pbrMetallicRoughness' attr of GLTF material
 struct PbrMaterial
 {
+  static constexpr u8 TextureCount = CAST_FLAG(PbrTextureFlag::COUNT);
   // factors:
   glm::vec4 BaseColorFactor{ 1.f };
   glm::vec4 EmissiveFactor{ 1.f };
@@ -15,30 +25,22 @@ struct PbrMaterial
   f32 RoughnessFactor{ 1.f };
 
   // GPU resources:
-  SDL_GPUTexture* BaseColorTexture{ nullptr };
-  SDL_GPUSampler* BaseColorSampler{ nullptr };
+  // SDL_GPUTexture* BaseColorTexture{ nullptr };
+  // SDL_GPUSampler* BaseColorSampler{ nullptr };
+  //
+  // SDL_GPUTexture* MetalRoughTexture{ nullptr };
+  // SDL_GPUSampler* MetalRoughSampler{ nullptr };
+  //
+  // SDL_GPUTexture* NormalTexture{ nullptr };
+  // SDL_GPUSampler* NormalSampler{ nullptr };
 
-  SDL_GPUTexture* MetalRoughTexture{ nullptr };
-  SDL_GPUSampler* MetalRoughSampler{ nullptr };
+  std::array<SDL_GPUTextureSamplerBinding, CAST_FLAG(PbrTextureFlag::COUNT)>
+    SamplerBindings{};
 
-  SDL_GPUTexture* NormalTexture{ nullptr };
-  SDL_GPUSampler* NormalSampler{ nullptr };
-
-  enum class PbrTexture : size_t
+  void BindSamplers(SDL_GPURenderPass* pass)
   {
-    BaseColor,
-    MetalRough,
-    Normal,
-    COUNT
-  };
-  std::array<SDL_GPUTextureSamplerBinding,
-             static_cast<size_t>(PbrTexture::COUNT)>
-    Samplers;
-  // {
-  //     SDL_GPUTextureSamplerBinding{ BaseColorTexture, BaseColorSampler },
-  //     SDL_GPUTextureSamplerBinding{ MetalRoughTexture, MetalRoughSampler },
-  //     SDL_GPUTextureSamplerBinding{ NormalTexture, NormalSampler },
-  //   };
+    SDL_BindGPUFragmentSamplers(pass, 0, SamplerBindings.begin(), TextureCount);
+  }
 
   // SDL_GPUGraphicsPipeline* pipeline{ nullptr };
 };

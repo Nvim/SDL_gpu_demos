@@ -162,7 +162,8 @@ GLTFLoader::Load()
     LOG_ERROR("Couldn't load samplers from GLTF");
     return false;
   }
-  LOG_DEBUG("Loaded GLTF samplers");
+  LOG_DEBUG("Loaded {} GLTF samplers", samplers_.size());
+  assert(samplers_.size() != 0);
 
   loaded_ = LoadImageData();
   if (!loaded_) {
@@ -252,6 +253,7 @@ GLTFLoader::LoadVertexData()
             [&](glm::vec2 v, size_t index) {
               vertices[initial_vtx + index].uv[0] = v.x;
               vertices[initial_vtx + index].uv[1] = v.y;
+              // LOG_TRACE("{},{}", v.x, v.y);
             });
         }
       }
@@ -508,16 +510,18 @@ GLTFLoader::LoadSamplers()
     return true;
   }
 
-  auto near = fastgltf::Filter::Nearest;
+  // auto near = fastgltf::Filter::Nearest;
+  auto linear = fastgltf::Filter::Linear;
   for (auto& sampler : asset_.samplers) {
     SDL_GPUSamplerCreateInfo info{};
     {
-      info.min_filter = extract_filter(sampler.minFilter.value_or(near));
-      info.mag_filter = extract_filter(sampler.magFilter.value_or(near));
-      info.mipmap_mode = extract_mipmap_mode(sampler.minFilter.value_or(near));
-      info.address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
-      info.address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
-      info.address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
+      info.min_filter = extract_filter(sampler.minFilter.value_or(linear));
+      info.mag_filter = extract_filter(sampler.magFilter.value_or(linear));
+      info.mipmap_mode =
+        extract_mipmap_mode(sampler.minFilter.value_or(linear));
+      info.address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_REPEAT;
+      info.address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_REPEAT;
+      info.address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_REPEAT;
     }
     auto* s = SDL_CreateGPUSampler(program_->Device, &info);
     if (!s) {
@@ -538,13 +542,14 @@ GLTFLoader::CreateDefaultSampler()
     LOG_WARN("Re-creating default sampler");
   }
   static SDL_GPUSamplerCreateInfo sampler_info{};
-  {
-    sampler_info.min_filter = SDL_GPU_FILTER_NEAREST;
-    sampler_info.mag_filter = SDL_GPU_FILTER_NEAREST;
-    sampler_info.mipmap_mode = SDL_GPU_SAMPLERMIPMAPMODE_NEAREST;
-    sampler_info.address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
-    sampler_info.address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
-    sampler_info.address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
+  { // Matches GLTF default spec. Linear mipmap + linear filter = trilinear
+    // filtering
+    sampler_info.min_filter = SDL_GPU_FILTER_LINEAR;
+    sampler_info.mag_filter = SDL_GPU_FILTER_LINEAR;
+    sampler_info.mipmap_mode = SDL_GPU_SAMPLERMIPMAPMODE_LINEAR;
+    sampler_info.address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_REPEAT;
+    sampler_info.address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_REPEAT;
+    sampler_info.address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_REPEAT;
   }
   SDL_GPUSampler* s = SDL_CreateGPUSampler(program_->Device, &sampler_info);
   if (!s) {
@@ -621,6 +626,7 @@ GLTFLoader::LoadMaterials()
   }
   materials_ = std::vector<SharedPtr<PbrMaterial>>{};
   materials_.reserve(asset_.materials.size());
+
   for (auto& mat : asset_.materials) {
     auto newMat = std::make_shared<PbrMaterial>();
 
@@ -636,46 +642,29 @@ GLTFLoader::LoadMaterials()
       newMat->RoughnessFactor = mat.pbrData.roughnessFactor;
     }
 
-    // TODO: mark which "features" are present with flags read from shader
-    // TODO: function for this
-    if (mat.pbrData.baseColorTexture.has_value()) {
-      auto idx = mat.pbrData.baseColorTexture.value().textureIndex;
-      assert(idx < textures_.size());
-      newMat->BaseColorTexture = textures_[idx];
+    // template optional because fastgltf::NormalTextureInfo type is derived
+    // from fastgltf::TextureInfo
+    auto bindTexture = [&](const auto& opt_tex_info, PbrTextureFlag tex_type) {
+      // using TexInfoType = std::decay_t<decltype(*opt_tex_info)>;
+      if (opt_tex_info.has_value()) {
+        auto tex_idx = opt_tex_info.value().textureIndex;
+        assert(tex_idx < textures_.size());
 
-      idx = asset_.textures[idx].samplerIndex.value_or(0);
-      assert(idx < samplers_.size());
-      newMat->BaseColorSampler = samplers_[idx];
-      newMat->Samplers[(size_t)PbrMaterial::PbrTexture::BaseColor] =
-        SDL_GPUTextureSamplerBinding{ newMat->BaseColorTexture,
-                                      newMat->BaseColorSampler };
-    }
+        auto sampler_idx = asset_.textures[tex_idx].samplerIndex.value_or(0);
+        assert(sampler_idx < samplers_.size());
+        newMat->SamplerBindings[CAST_FLAG(tex_type)] =
+          SDL_GPUTextureSamplerBinding{ textures_[tex_idx],
+                                        samplers_[sampler_idx] };
+      } else {
+        newMat->SamplerBindings[CAST_FLAG(tex_type)] =
+          SDL_GPUTextureSamplerBinding{ default_texture_, default_sampler_ };
+      }
+    };
 
-    if (mat.pbrData.metallicRoughnessTexture.has_value()) {
-      auto idx = mat.pbrData.metallicRoughnessTexture.value().textureIndex;
-      assert(idx < textures_.size());
-      newMat->MetalRoughTexture = textures_[idx];
-
-      idx = asset_.textures[idx].samplerIndex.value_or(0);
-      assert(idx < samplers_.size());
-      newMat->MetalRoughSampler = samplers_[idx];
-      newMat->Samplers[(size_t)PbrMaterial::PbrTexture::MetalRough] =
-        SDL_GPUTextureSamplerBinding{ newMat->MetalRoughTexture,
-                                      newMat->MetalRoughSampler };
-    }
-
-    if (mat.normalTexture.has_value()) {
-      auto idx = mat.normalTexture.value().textureIndex;
-      assert(idx < textures_.size());
-      newMat->NormalTexture = textures_[idx];
-
-      idx = asset_.textures[idx].samplerIndex.value_or(0);
-      assert(idx < samplers_.size());
-      newMat->NormalSampler = samplers_[idx];
-      newMat->Samplers[(size_t)PbrMaterial::PbrTexture::Normal] =
-        SDL_GPUTextureSamplerBinding{ newMat->NormalTexture,
-                                      newMat->NormalSampler };
-    }
+    bindTexture(mat.pbrData.baseColorTexture, PbrTextureFlag::BaseColor);
+    bindTexture(mat.pbrData.metallicRoughnessTexture,
+                PbrTextureFlag::MetalRough);
+    bindTexture(mat.normalTexture, PbrTextureFlag::Normal);
 
     materials_.push_back(newMat);
   }

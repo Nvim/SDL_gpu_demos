@@ -25,6 +25,7 @@ void main()
 {
     outUv = inUv;
     outNormal = mat3(transpose(inverse(mat_m))) * inNormal;
+    outNormal = (mat_m * vec4(inNormal, 0.f)).xyz;
 
     vec4 relative_pos = mat_m * vec4(inPos, 1.0);
     if (dimension == 1) {

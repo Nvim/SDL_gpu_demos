@@ -40,7 +40,7 @@ struct SceneDataBinding
   glm::vec4 sun_color;
   f32 spread;
   u32 dimension;
-  f32 _pad[2] = {0.f};
+  f32 _pad[2] = { 0.f };
 };
 
 struct DrawDataBinding
@@ -93,7 +93,10 @@ private:
   //   this,
   //   "resources/models/BarramundiFishGLTF/BarramundiFish.gltf"
   // };
-  GLTFLoader loader_{ this, "resources/models/BarramundiFish.glb" };
+  // GLTFLoader loader_{ this, "resources/models/BarramundiFish.glb" };
+  // GLTFLoader loader_{ this, "resources/models/CubeGLTF/Cube.gltf" };
+  GLTFLoader loader_{ this,
+                      "resources/models/DamagedHelmet/DamagedHelmet.gltf" };
   const char* vertex_path_;
   const char* fragment_path_;
   const int vp_width_{ 640 };
