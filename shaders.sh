@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
 
-glslang resources/shaders/src/frag.frag -V -o resources/shaders/compiled/frag.spv -Iresources/shaders/src;
-glslang resources/shaders/src/vert.vert -V -o resources/shaders/compiled/vert.spv -Iresources/shaders/src;
+SRC=resources/shaders/src
+OUT=resources/shaders/compiled
 
-glslang resources/shaders/src/skybox.frag -V -o resources/shaders/compiled/skybox.frag.spv;
-glslang resources/shaders/src/skybox.vert -V -o resources/shaders/compiled/skybox.vert.spv -Iresources/shaders/src;
+mkdir -p "$OUT"
+
+glslang $SRC/frag.frag -V -o $OUT/frag.spv -I$SRC;
+glslang $SRC/vert.vert -V -o $OUT/vert.spv -I$SRC;
+glslang $SRC/skybox.frag -V -o $OUT/skybox.frag.spv;
+glslang $SRC/skybox.vert -V -o $OUT/skybox.vert.spv -I$SRC;

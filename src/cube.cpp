@@ -165,8 +165,7 @@ CubeProgram::Init()
     }
     {
       auto& state = pipelineCreateInfo.depth_stencil_state;
-      state.compare_op = SDL_GPU_COMPAREOP_LESS_OR_EQUAL;
-      state.write_mask = 0xFF;
+      state.compare_op = SDL_GPU_COMPAREOP_LESS;
       state.enable_depth_test = true;
       state.enable_depth_write = true;
       state.enable_stencil_test = false;
@@ -355,8 +354,9 @@ CubeProgram::Draw()
                                      0);
       }
     }
-
-    skybox_.Draw(scenePass);
+    if (skybox_toggle_) {
+      skybox_.Draw(scenePass);
+    }
 
     SDL_EndGPURenderPass(scenePass);
   }
@@ -500,6 +500,7 @@ CubeProgram::DrawGui()
       }
       ImGui::InputInt("Texture index", &tex_idx);
       ImGui::Checkbox("Wireframe", &wireframe_);
+      ImGui::Checkbox("Skybox", &skybox_toggle_);
       ImGui::End();
     }
   }

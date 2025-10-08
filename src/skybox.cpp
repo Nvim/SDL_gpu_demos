@@ -150,6 +150,15 @@ Skybox::CreatePipeline()
       auto& state = pipelineCreateInfo.target_info;
       state.color_target_descriptions = &col_desc;
       state.num_color_targets = 1;
+      state.depth_stencil_format = SDL_GPU_TEXTUREFORMAT_D16_UNORM;
+      state.has_depth_stencil_target = true;
+    }
+    {
+      auto& state = pipelineCreateInfo.depth_stencil_state;
+      state.compare_op = SDL_GPU_COMPAREOP_LESS_OR_EQUAL;
+      state.enable_depth_test = true;
+      state.enable_depth_write = false;
+      state.enable_stencil_test = false;
     }
   }
   Pipeline = SDL_CreateGPUGraphicsPipeline(device_, &pipelineCreateInfo);

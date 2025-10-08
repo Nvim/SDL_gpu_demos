@@ -106,6 +106,7 @@ private:
   Rotation rotations_[3]; // spin cube
   InstancingCfg instance_cfg{};
   bool wireframe_{ false };
+  bool skybox_toggle_{ true };
   i32 tex_idx{ 0 };
 
   // GPU Resources:
