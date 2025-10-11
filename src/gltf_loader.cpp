@@ -1,8 +1,17 @@
 #include "gltf_loader.h"
+#include "fastgltf/math.hpp"
 #include "logger.h"
+#include "src/cube.h"
 #include "src/material.h"
+#include "src/rendersystem.h"
+#include "src/types.h"
 #include <SDL3/SDL_error.h>
 #include <SDL3/SDL_gpu.h>
+#define GLM_ENABLE_EXPERIMENTAL 1
+#include <glm/ext/matrix_transform.hpp>
+#include <glm/ext/quaternion_common.hpp>
+#include <glm/ext/quaternion_float.hpp>
+#include <glm/gtx/quaternion.hpp>
 #include <memory>
 #include <vector>
 
@@ -75,10 +84,14 @@ GLTFLoader::Release()
   LOG_TRACE("GLTFLoader::Release");
   auto Device = program_->Device;
   for (auto& tex : textures_) {
-    RELEASE_IF(tex, SDL_ReleaseGPUTexture);
+    if (tex != default_texture_) {
+      RELEASE_IF(tex, SDL_ReleaseGPUTexture);
+    }
   }
   for (auto& sampler : samplers_) {
-    RELEASE_IF(sampler, SDL_ReleaseGPUSampler);
+    if (sampler != default_sampler_) {
+      RELEASE_IF(sampler, SDL_ReleaseGPUSampler);
+    }
   }
   for (auto& mesh : meshes_) {
     RELEASE_IF(mesh.IndexBuffer(), SDL_ReleaseGPUBuffer);
@@ -106,7 +119,7 @@ GLTFLoader::Samplers() const
 {
   return samplers_;
 }
-const std::vector<SharedPtr<PbrMaterial>>&
+const std::vector<SharedPtr<GLTFPbrMaterial>>&
 GLTFLoader::Materials() const
 {
   return materials_;
@@ -185,6 +198,13 @@ GLTFLoader::Load()
     return false;
   }
   LOG_DEBUG("Loaded GLTF meshes");
+
+  loaded_ = LoadNodes();
+  if (!loaded_) {
+    LOG_ERROR("Couldn't load nodes from GLTF");
+    return false;
+  }
+  LOG_DEBUG("Loaded GLTF Nodes");
 
   return loaded_;
 }
@@ -274,10 +294,12 @@ GLTFLoader::LoadVertexData()
 
       { // material:
         if (p.materialIndex.has_value()) {
-          newGeometry.material = materials_[p.materialIndex.value()];
+          newGeometry.material = materials_[p.materialIndex.value()]->Build();
         } else {
-          newGeometry.material = materials_[0];
+          newGeometry.material = materials_[0]->Build();
         }
+        newGeometry.material->Pipeline =
+          static_cast<CubeProgram*>(program_)->ScenePipeline;
       }
 
       newMesh.Submeshes.push_back(newGeometry);
@@ -346,8 +368,23 @@ GLTFLoader::LoadImageData()
     textures_.push_back(tex);
   }
 
+  for(const auto& tex : asset_.textures) {
+    if(!tex.imageIndex.has_value()) {
+      LOG_WARN("Texture doesn't have image.");
+      if (tex.basisuImageIndex.has_value()) {
+        LOG_WARN("It has a baseiu");
+      }
+      if (tex.ddsImageIndex.has_value()) {
+        LOG_WARN("It has a dds");
+      }
+      if (tex.webpImageIndex.has_value()) {
+        LOG_WARN("It has a webp");
+      }
+    }
+  }
+
   LOG_DEBUG("{} textures were created", textures_.size());
-  assert(textures_.size() == asset_.textures.size());
+  assert(textures_.size() == asset_.images.size());
   return !textures_.empty();
 }
 
@@ -624,11 +661,11 @@ GLTFLoader::LoadMaterials()
     materials_.push_back(default_material_);
     return true;
   }
-  materials_ = std::vector<SharedPtr<PbrMaterial>>{};
+  materials_ = std::vector<SharedPtr<GLTFPbrMaterial>>{};
   materials_.reserve(asset_.materials.size());
 
   for (auto& mat : asset_.materials) {
-    auto newMat = std::make_shared<PbrMaterial>();
+    auto newMat = std::make_shared<GLTFPbrMaterial>();
 
     { // factors
       newMat->BaseColorFactor.x = mat.pbrData.baseColorFactor.x();
@@ -644,32 +681,150 @@ GLTFLoader::LoadMaterials()
 
     // template optional because fastgltf::NormalTextureInfo type is derived
     // from fastgltf::TextureInfo
-    auto bindTexture = [&](const auto& opt_tex_info, PbrTextureFlag tex_type) {
-      // using TexInfoType = std::decay_t<decltype(*opt_tex_info)>;
-      if (opt_tex_info.has_value()) {
-        auto tex_idx = opt_tex_info.value().textureIndex;
-        assert(tex_idx < textures_.size());
+    // auto bindTexture = [&](const auto& opt_tex_info, PbrTextureFlag tex_type)
+    // {
+    //   // using TexInfoType = std::decay_t<decltype(*opt_tex_info)>;
+    //   if (opt_tex_info.has_value()) {
+    //     auto tex_idx = opt_tex_info.value().textureIndex;
+    //     assert(tex_idx < textures_.size());
+    //
+    //     auto sampler_idx = asset_.textures[tex_idx].samplerIndex.value_or(0);
+    //     assert(sampler_idx < samplers_.size());
+    //     newMat->SamplerBindings[CAST_FLAG(tex_type)] =
+    //       SDL_GPUTextureSamplerBinding{ textures_[tex_idx],
+    //                                     samplers_[sampler_idx] };
+    //   } else {
+    //     newMat->SamplerBindings[CAST_FLAG(tex_type)] =
+    //       SDL_GPUTextureSamplerBinding{ default_texture_, default_sampler_ };
+    //   }
+    // };
+    // bindTexture(mat.pbrData.baseColorTexture, PbrTextureFlag::BaseColor);
 
-        auto sampler_idx = asset_.textures[tex_idx].samplerIndex.value_or(0);
-        assert(sampler_idx < samplers_.size());
-        newMat->SamplerBindings[CAST_FLAG(tex_type)] =
-          SDL_GPUTextureSamplerBinding{ textures_[tex_idx],
-                                        samplers_[sampler_idx] };
-      } else {
-        newMat->SamplerBindings[CAST_FLAG(tex_type)] =
-          SDL_GPUTextureSamplerBinding{ default_texture_, default_sampler_ };
-      }
-    };
+    if (mat.pbrData.baseColorTexture.has_value()) {
+      auto tex_idx = mat.pbrData.baseColorTexture.value().textureIndex;
+      assert(tex_idx < textures_.size());
 
-    bindTexture(mat.pbrData.baseColorTexture, PbrTextureFlag::BaseColor);
-    bindTexture(mat.pbrData.metallicRoughnessTexture,
-                PbrTextureFlag::MetalRough);
-    bindTexture(mat.normalTexture, PbrTextureFlag::Normal);
+      auto sampler_idx = asset_.textures[tex_idx].samplerIndex.value_or(0);
+      assert(sampler_idx < samplers_.size());
+      newMat->BaseColorTexture = textures_[tex_idx];
+      newMat->BaseColorSampler = samplers_[sampler_idx];
+    } else {
+      newMat->BaseColorTexture = default_texture_;
+      newMat->BaseColorSampler = default_sampler_;
+    }
+    if (mat.pbrData.metallicRoughnessTexture.has_value()) {
+      auto tex_idx = mat.pbrData.metallicRoughnessTexture.value().textureIndex;
+      assert(tex_idx < textures_.size());
+
+      auto sampler_idx = asset_.textures[tex_idx].samplerIndex.value_or(0);
+      assert(sampler_idx < samplers_.size());
+      newMat->MetalRoughTexture = textures_[tex_idx];
+      newMat->MetalRoughSampler = samplers_[sampler_idx];
+    } else {
+      newMat->MetalRoughTexture = default_texture_;
+      newMat->MetalRoughSampler = default_sampler_;
+    }
+    if (mat.normalTexture.has_value()) {
+      auto tex_idx = mat.normalTexture.value().textureIndex;
+      assert(tex_idx < textures_.size());
+
+      auto sampler_idx = asset_.textures[tex_idx].samplerIndex.value_or(0);
+      assert(sampler_idx < samplers_.size());
+      newMat->NormalTexture = textures_[tex_idx];
+      newMat->NormalSampler = samplers_[sampler_idx];
+    } else {
+      newMat->NormalTexture = default_texture_;
+      newMat->NormalSampler = default_sampler_;
+    }
 
     materials_.push_back(newMat);
   }
   LOG_DEBUG("Loaded {} materials", materials_.size());
   return true;
+}
+
+bool
+GLTFLoader::LoadNodes()
+{
+  LOG_TRACE("GLTFLoader::CreateDefaultMaterial");
+  if (asset_.nodes.size() == 0) {
+    LOG_ERROR("GLTF has no nodes (TODO: handle it as it's valid)")
+    return false;
+  }
+  ParentNodes = std::vector<SharedPtr<SceneNode>>{};
+  AllNodes = std::vector<SharedPtr<SceneNode>>{};
+  AllNodes.reserve(asset_.nodes.size());
+
+  // Create node for every node in scene
+  for (const fastgltf::Node& node : asset_.nodes) {
+    std::shared_ptr<SceneNode> NewNode;
+
+    if (node.meshIndex.has_value()) {
+      NewNode = std::make_shared<MeshNode>();
+      auto idx = node.meshIndex.value();
+      static_cast<MeshNode*>(NewNode.get())->Mesh = &meshes_[idx];
+    } else {
+      NewNode = std::make_shared<SceneNode>();
+    }
+
+    std::visit(fastgltf::visitor{
+                 [&](fastgltf::math::fmat4x4 matrix) {
+                   memcpy(&NewNode->LocalMatrix, matrix.data(), sizeof(matrix));
+                 },
+                 [&](fastgltf::TRS transform) {
+                   glm::vec3 tl(transform.translation[0],
+                                transform.translation[1],
+                                transform.translation[2]);
+                   glm::quat rot(transform.rotation[3],
+                                 transform.rotation[0],
+                                 transform.rotation[1],
+                                 transform.rotation[2]);
+                   glm::vec3 sc(transform.scale[0],
+                                transform.scale[1],
+                                transform.scale[2]);
+
+                   glm::mat4 tm = glm::translate(glm::mat4(1.f), tl);
+                   glm::mat4 rm = glm::toMat4(rot);
+                   glm::mat4 sm = glm::scale(glm::mat4(1.f), sc);
+
+                   NewNode->LocalMatrix = tm * rm * sm;
+                 } },
+               node.transform);
+    AllNodes.push_back(NewNode);
+  }
+
+  // Iterate again to build hierarchy
+  for (u64 i = 0; i < asset_.nodes.size(); ++i) {
+    const fastgltf::Node& gltfnode = asset_.nodes[i];
+    const SharedPtr<SceneNode>& node = AllNodes[i];
+
+    for (const u64 childIdx : gltfnode.children) {
+      node->Children.push_back(AllNodes[childIdx]);
+      AllNodes[childIdx]->Parent = node;
+    }
+  }
+
+  // Iterate again to identify Parent Nodes
+  for (const auto& node : AllNodes) {
+    if (node->Parent.lock() == nullptr) {
+      ParentNodes.push_back(node);
+      node->Update(glm::mat4{ 1.0f }); // Bubble down world matrix computation
+    }
+  }
+
+  LOG_DEBUG("Loaded GLTF Nodes ({} parent, {} total)",
+            ParentNodes.size(),
+            AllNodes.size());
+
+  return true;
+}
+
+void
+GLTFLoader::Draw(glm::mat4 matrix, std::vector<RenderItem>& draws)
+{
+  for (const auto& parent : ParentNodes) {
+    parent->Draw(matrix, draws);
+  }
 }
 
 void
@@ -679,5 +834,5 @@ GLTFLoader::CreateDefaultMaterial()
   if (default_material_.get() != nullptr) {
     LOG_WARN("Re-creating default material");
   }
-  default_material_ = std::make_shared<PbrMaterial>();
+  default_material_ = std::make_shared<GLTFPbrMaterial>();
 }

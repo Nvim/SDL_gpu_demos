@@ -1,20 +1,16 @@
 #pragma once
 
 #include "fastgltf/types.hpp"
+#include "src/gltf_material.h"
 #include "src/logger.h"
-#include "src/material.h"
 #include "src/program.h"
+#include "src/rendersystem.h"
 #include "types.h"
 #include <SDL3/SDL_gpu.h>
 #include <fastgltf/core.hpp>
+#include <glm/ext/matrix_float4x4.hpp>
 #include <vector>
 
-struct Geometry
-{
-  const std::size_t FirstIndex;
-  const std::size_t VertexCount;
-  std::shared_ptr<PbrMaterial> material{ nullptr };
-};
 struct LoadedImage
 {
   int w, h,
@@ -22,35 +18,23 @@ struct LoadedImage
   u8* data{ nullptr };
 };
 
-// Vertex + Index buffer combo
-struct MeshBuffers
-{
-  SDL_GPUBuffer* VertexBuffer{};
-  SDL_GPUBuffer* IndexBuffer{};
-};
-
-struct MeshAsset
-{
-  const char* Name;
-  std::vector<Geometry> Submeshes;
-
-  MeshBuffers Buffers{};
-  SDL_GPUBuffer* VertexBuffer() const { return Buffers.VertexBuffer; }
-  SDL_GPUBuffer* IndexBuffer() const { return Buffers.IndexBuffer; }
-};
-
-class GLTFLoader
+class GLTFLoader : public IRenderable
 {
 public:
   GLTFLoader(Program* program, std::filesystem::path path);
   ~GLTFLoader();
 
   bool Load();
+  void Draw(glm::mat4 matrix, std::vector<RenderItem>& draws) override;
+  void Release();
+
+public:
   const std::vector<MeshAsset>& Meshes() const;
   const std::vector<SDL_GPUTexture*>& Textures() const;
   const std::vector<SDL_GPUSampler*>& Samplers() const;
-  const std::vector<SharedPtr<PbrMaterial>>& Materials() const;
-  void Release();
+  const std::vector<SharedPtr<GLTFPbrMaterial>>& Materials() const;
+  std::vector<std::shared_ptr<SceneNode>> ParentNodes;
+  std::vector<std::shared_ptr<SceneNode>> AllNodes;
 
 private:
   bool LoadVertexData();
@@ -69,12 +53,11 @@ private:
                                const fastgltf::Buffer& buffer);
   SDL_GPUTexture* CreateAndUploadTexture(LoadedImage& img);
   bool CreateDefaultTexture();
-
   bool LoadSamplers();
   bool CreateDefaultSampler();
-
   bool LoadMaterials();
   void CreateDefaultMaterial();
+  bool LoadNodes();
 
 private:
   Program* program_; // TODO: decouple program from renderer, and hold pointer
@@ -85,12 +68,12 @@ private:
 
   SDL_GPUSampler* default_sampler_{ nullptr };
   SDL_GPUTexture* default_texture_{ nullptr };
-  SharedPtr<PbrMaterial> default_material_{ nullptr };
+  SharedPtr<GLTFPbrMaterial> default_material_{ nullptr };
 
   std::vector<MeshAsset> meshes_;
   std::vector<SDL_GPUTexture*> textures_;
   std::vector<SDL_GPUSampler*> samplers_;
-  std::vector<SharedPtr<PbrMaterial>> materials_;
+  std::vector<SharedPtr<GLTFPbrMaterial>> materials_;
 };
 
 template<typename V, typename I>

@@ -49,12 +49,6 @@ struct DrawDataBinding
   // u32 material_index;
 };
 
-struct MaterialDataBinding
-{
-  glm::vec4 color_factors;
-  glm::vec4 metal_rough_factors;
-};
-
 struct InstancingCfg
 {
   float spread = 5.f;   // gap between each mesh instance
@@ -76,6 +70,9 @@ public:
   bool ShouldQuit() override;
   ~CubeProgram();
 
+public:
+  SDL_GPUGraphicsPipeline* ScenePipeline{ nullptr };
+
 private:
   bool InitGui();
   bool LoadShaders();
@@ -86,17 +83,13 @@ private:
 private:
   // Internals:
   bool quit{ false };
-  Transform cube_transform_;
+  Transform global_transform_;
   Camera camera_{ glm::radians(60.0f), 640 / 480.f, .1f, 100.f };
   Skybox skybox_{ "resources/textures/skybox", Window, Device };
-  // GLTFLoader loader_{
-  //   this,
-  //   "resources/models/BarramundiFishGLTF/BarramundiFish.gltf"
-  // };
-  // GLTFLoader loader_{ this, "resources/models/BarramundiFish.glb" };
+  GLTFLoader loader_{ this, "resources/models/BarramundiFish.glb" };
   // GLTFLoader loader_{ this, "resources/models/CubeGLTF/Cube.gltf" };
-  GLTFLoader loader_{ this,
-                      "resources/models/DamagedHelmet/DamagedHelmet.gltf" };
+  // GLTFLoader loader_{ this,
+  //                     "resources/models/DamagedHelmet/DamagedHelmet.gltf" };
   const char* vertex_path_;
   const char* fragment_path_;
   const int vp_width_{ 640 };
@@ -115,7 +108,6 @@ private:
   // TODO: store scene-related GPU Resources in GLTF scene class
   SDL_GPUShader* vertex_{ nullptr };
   SDL_GPUShader* fragment_{ nullptr };
-  SDL_GPUGraphicsPipeline* scene_pipeline_{ nullptr };
   SDL_GPUGraphicsPipeline* scene_wireframe_pipeline_{ nullptr };
   SDL_GPUColorTargetInfo scene_color_target_info_{};
   SDL_GPUDepthStencilTargetInfo scene_depth_target_info_{};

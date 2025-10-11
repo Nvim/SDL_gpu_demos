@@ -61,17 +61,17 @@ CubeProgram::CubeProgram(SDL_GPUDevice* device,
   {
     rotations_[0] = Rotation{
       "X Axis",
-      &cube_transform_.rotation_.x,
+      &global_transform_.rotation_.x,
       0.f,
     };
     rotations_[1] = Rotation{
       "Y Axis",
-      &cube_transform_.rotation_.y,
+      &global_transform_.rotation_.y,
       1.f,
     };
     rotations_[2] = Rotation{
       "Z Axis",
-      &cube_transform_.rotation_.z,
+      &global_transform_.rotation_.z,
       0.f,
     };
   }
@@ -82,15 +82,13 @@ CubeProgram::~CubeProgram()
   LOG_TRACE("Destroying app");
 
   // TODO: segfaults:
-  // loader_.Release();
   RELEASE_IF(vertex_, SDL_ReleaseGPUShader);
   RELEASE_IF(fragment_, SDL_ReleaseGPUShader);
-  RELEASE_IF(scene_pipeline_, SDL_ReleaseGPUGraphicsPipeline);
+  RELEASE_IF(ScenePipeline, SDL_ReleaseGPUGraphicsPipeline);
   RELEASE_IF(scene_wireframe_pipeline_, SDL_ReleaseGPUGraphicsPipeline);
   RELEASE_IF(depth_target_, SDL_ReleaseGPUTexture);
   RELEASE_IF(color_target_, SDL_ReleaseGPUTexture);
-  // RELEASE_IF(vbuffer_, SDL_ReleaseGPUBuffer);
-  // RELEASE_IF(ibuffer_, SDL_ReleaseGPUBuffer);
+  loader_.Release();
 
   LOG_DEBUG("Released GPU Resources");
 
@@ -179,8 +177,8 @@ CubeProgram::Init()
     }
   }
 
-  scene_pipeline_ = SDL_CreateGPUGraphicsPipeline(Device, &pipelineCreateInfo);
-  if (scene_pipeline_ == NULL) {
+  ScenePipeline = SDL_CreateGPUGraphicsPipeline(Device, &pipelineCreateInfo);
+  if (ScenePipeline == NULL) {
     LOG_ERROR("Couldn't create pipeline!");
     return false;
   }
@@ -206,8 +204,8 @@ CubeProgram::Init()
   }
   LOG_DEBUG("Created render target textures");
 
-  cube_transform_.translation_ = { 0.f, 0.f, 0.0f };
-  cube_transform_.scale_ = { 1.f, 1.f, 1.f };
+  global_transform_.translation_ = { 0.f, 0.f, 0.0f };
+  global_transform_.scale_ = { 1.f, 1.f, 1.f };
 
   camera_.Position = glm::vec3{ 0.f, 1.f, -4.f };
   camera_.Target = glm::vec3{ 0.f, 0.f, 0.f };
@@ -243,29 +241,27 @@ CubeProgram::Poll()
 void
 CubeProgram::UpdateScene()
 {
-  // static float c = -1.f;
-
   for (const auto& rot : rotations_) {
     if (rot.speed != 0.f) {
       *rot.axis =
         glm::mod(*rot.axis + DeltaTime * rot.speed, glm::two_pi<float>());
     }
   }
+  global_transform_.Touched = true;
 
-  // if (camera_.Position.z < -10.f) {
-  //   c = 1.f;
-  // } else if (camera_.Position.z > -1.f) {
-  //   c = -1.f;
-  // }
-  // camera_.Position.z += c * DeltaTime * 2.5f;
-  // camera_.Touched = true;
-  cube_transform_.Touched = true;
+  for (const auto& node : loader_.ParentNodes) {
+    node->Update(global_transform_.Matrix());
+  }
   camera_.Update();
 }
 
 bool
 CubeProgram::Draw()
 {
+  if constexpr (sizeof(MaterialDataBinding) != 32) {
+    LOG_CRITICAL("size is {}", sizeof(MaterialDataBinding));
+    return false;
+  }
   static const SDL_GPUViewport scene_vp{
     0, 0, float(vp_width_), float(vp_height_), 0.1f, 1.0f
   };
@@ -299,8 +295,6 @@ CubeProgram::Draw()
                                glm::vec4{ .9f, .9f, .9f, 1.f },
                                instance_cfg.spread,
                                instance_cfg.dimension };
-  // TODO: this should be different for every mesh in hierarchy:
-  DrawDataBinding object_data{ cube_transform_.Matrix() };
 
   ImGui_ImplSDLGPU3_PrepareDrawData(draw_data, cmdbuf);
 
@@ -316,43 +310,30 @@ CubeProgram::Draw()
 
     SDL_SetGPUViewport(scenePass, &scene_vp);
 
-    SDL_BindGPUGraphicsPipeline(
-      scenePass, wireframe_ ? scene_wireframe_pipeline_ : scene_pipeline_);
+    std::vector<RenderItem> draws;
+    loader_.Draw(glm::mat4{ 1.0f }, draws);
+    for (const auto& draw : draws) {
+      assert(draw.VertexBuffer != nullptr);
+      assert(draw.IndexBuffer != nullptr);
+      const SDL_GPUBufferBinding vBinding{ draw.VertexBuffer, 0 };
+      const SDL_GPUBufferBinding iBinding{ draw.IndexBuffer, 0 };
 
-    for (const auto& mesh : loader_.Meshes()) {
-
-      assert(mesh.VertexBuffer() != nullptr);
-      assert(mesh.IndexBuffer() != nullptr);
-
-      const SDL_GPUBufferBinding vBinding{ mesh.VertexBuffer(), 0 };
-      const SDL_GPUBufferBinding iBinding{ mesh.IndexBuffer(), 0 };
-
+      // Geometry
       SDL_BindGPUVertexBuffers(scenePass, 0, &vBinding, 1);
       SDL_BindGPUIndexBuffer(
         scenePass, &iBinding, SDL_GPU_INDEXELEMENTSIZE_32BIT);
+      DrawDataBinding b{ draw.matrix };
+      SDL_PushGPUVertexUniformData(cmdbuf, 1, &b, sizeof(b));
 
-      // push mesh's mvp
-      SDL_PushGPUVertexUniformData(
-        cmdbuf, 1, &object_data, sizeof(object_data));
-      for (const auto& submesh : mesh.Submeshes) {
+      // Material
+      auto material = draw.Material;
+      SDL_BindGPUGraphicsPipeline(scenePass, material->Pipeline);
 
-        // push submesh's material
-        auto material = submesh.material;
-        MaterialDataBinding m{ material->BaseColorFactor,
-                               glm::vec4{ material->MetallicFactor,
-                                          material->RoughnessFactor,
-                                          static_cast<f32>(tex_idx),
-                                          0.f } };
-        SDL_PushGPUFragmentUniformData(cmdbuf, 1, &m, sizeof(m));
+      material->ubo.Bind(cmdbuf);
 
-        material->BindSamplers(scenePass);
-        SDL_DrawGPUIndexedPrimitives(scenePass,
-                                     submesh.VertexCount,
-                                     total_instances,
-                                     submesh.FirstIndex,
-                                     0,
-                                     0);
-      }
+      material->BindSamplers(scenePass);
+      SDL_DrawGPUIndexedPrimitives(
+        scenePass, draw.VertexCount, total_instances, draw.FirstIndex, 0, 0);
     }
     if (skybox_toggle_) {
       skybox_.Draw(scenePass);
@@ -385,7 +366,7 @@ CubeProgram::LoadShaders()
     return false;
   }
   fragment_ =
-    LoadShader(fragment_path_, Device, PbrMaterial::TextureCount, 2, 0, 0);
+    LoadShader(fragment_path_, Device, GLTFPbrMaterial::TextureCount, 2, 0, 0);
   if (fragment_ == nullptr) {
     LOG_ERROR("Couldn't load fragment shader at path {}", fragment_path_);
     return false;

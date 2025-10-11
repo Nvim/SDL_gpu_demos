@@ -1,8 +1,11 @@
 #pragma once
 
-#include "src/types.h"
+#include "src/util.h"
+#include "types.h"
+#include "ubo.h"
 #include <SDL3/SDL_gpu.h>
 #include <array>
+#include <glm/ext/matrix_float4x4.hpp>
 #include <glm/vec4.hpp>
 
 enum class PbrTextureFlag : u8
@@ -12,35 +15,28 @@ enum class PbrTextureFlag : u8
   Normal = 2,
   COUNT
 };
-#define CAST_FLAG(f) static_cast<u8>(f)
 
-// maps to the 'pbrMetallicRoughness' attr of GLTF material
-struct PbrMaterial
+static constexpr u32 MaterialBindingSlot = 1;
+
+// Generic material type, holds everything necessary to draw:
+// - Pipeline
+// - TextureSamplerBindings
+// - UBOs
+struct MaterialInstance
 {
-  static constexpr u8 TextureCount = CAST_FLAG(PbrTextureFlag::COUNT);
-  // factors:
-  glm::vec4 BaseColorFactor{ 1.f };
-  glm::vec4 EmissiveFactor{ 1.f };
-  f32 MetallicFactor{ 1.f };
-  f32 RoughnessFactor{ 1.f };
+  static constexpr u8 TextureCount =
+    CastFlag<u8, PbrTextureFlag>(PbrTextureFlag::COUNT);
 
-  // GPU resources:
-  // SDL_GPUTexture* BaseColorTexture{ nullptr };
-  // SDL_GPUSampler* BaseColorSampler{ nullptr };
-  //
-  // SDL_GPUTexture* MetalRoughTexture{ nullptr };
-  // SDL_GPUSampler* MetalRoughSampler{ nullptr };
-  //
-  // SDL_GPUTexture* NormalTexture{ nullptr };
-  // SDL_GPUSampler* NormalSampler{ nullptr };
-
-  std::array<SDL_GPUTextureSamplerBinding, CAST_FLAG(PbrTextureFlag::COUNT)>
-    SamplerBindings{};
-
+  SDL_GPUGraphicsPipeline* Pipeline;
+  std::array<SDL_GPUTextureSamplerBinding, TextureCount> SamplerBindings{};
+  UBO<MaterialDataBinding> ubo;
   void BindSamplers(SDL_GPURenderPass* pass)
   {
     SDL_BindGPUFragmentSamplers(pass, 0, SamplerBindings.begin(), TextureCount);
   }
+};
 
-  // SDL_GPUGraphicsPipeline* pipeline{ nullptr };
+struct IMaterialBuilder
+{
+  virtual SharedPtr<MaterialInstance> Build() = 0;
 };
