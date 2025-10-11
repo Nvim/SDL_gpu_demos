@@ -8,6 +8,7 @@
 #include "program.h"
 #include "skybox.h"
 #include "src/gltf_loader.h"
+#include "src/gltf_scene.h"
 #include "transform.h"
 #include "util.h"
 
@@ -86,10 +87,13 @@ private:
   Transform global_transform_;
   Camera camera_{ glm::radians(60.0f), 640 / 480.f, .1f, 100.f };
   Skybox skybox_{ "resources/textures/skybox", Window, Device };
-  GLTFLoader loader_{ this, "resources/models/BarramundiFish.glb" };
-  // GLTFLoader loader_{ this, "resources/models/CubeGLTF/Cube.gltf" };
-  // GLTFLoader loader_{ this,
-  //                     "resources/models/DamagedHelmet/DamagedHelmet.gltf" };
+  GLTFLoader loader_{ this };
+  std::filesystem::path scene_path{
+    "resources/models/DamagedHelmet/DamagedHelmet.gltf"
+    // "resources/models/CubeGLTF/Cube.gltf"
+    // "resources/models/BarramundiFish.glb"
+  };
+  GLTFScene scene_{};
   const char* vertex_path_;
   const char* fragment_path_;
   const int vp_width_{ 640 };

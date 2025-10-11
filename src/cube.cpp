@@ -18,7 +18,6 @@
 
 #include "src/camera.h"
 #include "src/logger.h"
-#include "src/material.h"
 #include "util.h"
 
 CubeProgram::CubeProgram(SDL_GPUDevice* device,
@@ -80,6 +79,7 @@ CubeProgram::CubeProgram(SDL_GPUDevice* device,
 CubeProgram::~CubeProgram()
 {
   LOG_TRACE("Destroying app");
+  scene_.Release();
 
   // TODO: segfaults:
   RELEASE_IF(vertex_, SDL_ReleaseGPUShader);
@@ -190,13 +190,12 @@ CubeProgram::Init()
     return false;
   }
   LOG_DEBUG("Created pipelines");
-
-  if (!loader_.Load()) {
+  if (!loader_.Load(&scene_, scene_path)) {
     LOG_CRITICAL("Couldn't initialize GLTF loader");
     return false;
   }
-  assert(!loader_.Meshes().empty());
-  LOG_INFO("Loaded {} meshes", loader_.Meshes().size());
+  assert(!scene_.Meshes().empty());
+  LOG_INFO("Loaded {} meshes", scene_.Meshes().size());
 
   if (!CreateSceneRenderTargets()) {
     LOG_ERROR("Couldn't create render target textures!");
@@ -249,7 +248,7 @@ CubeProgram::UpdateScene()
   }
   global_transform_.Touched = true;
 
-  for (const auto& node : loader_.ParentNodes) {
+  for (const auto& node : scene_.ParentNodes()) {
     node->Update(global_transform_.Matrix());
   }
   camera_.Update();
@@ -311,7 +310,7 @@ CubeProgram::Draw()
     SDL_SetGPUViewport(scenePass, &scene_vp);
 
     std::vector<RenderItem> draws;
-    loader_.Draw(glm::mat4{ 1.0f }, draws);
+    scene_.Draw(glm::mat4{ 1.0f }, draws);
     for (const auto& draw : draws) {
       assert(draw.VertexBuffer != nullptr);
       assert(draw.IndexBuffer != nullptr);

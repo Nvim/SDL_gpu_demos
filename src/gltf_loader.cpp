@@ -2,7 +2,6 @@
 #include "fastgltf/math.hpp"
 #include "logger.h"
 #include "src/cube.h"
-#include "src/material.h"
 #include "src/rendersystem.h"
 #include "src/types.h"
 #include <SDL3/SDL_error.h>
@@ -67,9 +66,8 @@ extract_mipmap_mode(fastgltf::Filter filter)
 
 }
 
-GLTFLoader::GLTFLoader(Program* program, std::filesystem::path path)
+GLTFLoader::GLTFLoader(Program* program)
   : program_{ program }
-  , path_{ path }
 {
 }
 
@@ -82,55 +80,51 @@ void
 GLTFLoader::Release()
 {
   LOG_TRACE("GLTFLoader::Release");
+
   auto Device = program_->Device;
-  for (auto& tex : textures_) {
-    if (tex != default_texture_) {
-      RELEASE_IF(tex, SDL_ReleaseGPUTexture);
-    }
-  }
-  for (auto& sampler : samplers_) {
-    if (sampler != default_sampler_) {
-      RELEASE_IF(sampler, SDL_ReleaseGPUSampler);
-    }
-  }
-  for (auto& mesh : meshes_) {
-    RELEASE_IF(mesh.IndexBuffer(), SDL_ReleaseGPUBuffer);
-    RELEASE_IF(mesh.VertexBuffer(), SDL_ReleaseGPUBuffer);
-  }
   RELEASE_IF(default_texture_, SDL_ReleaseGPUTexture);
   RELEASE_IF(default_sampler_, SDL_ReleaseGPUSampler);
-  LOG_DEBUG("Released GLTF resources");
+
+  LOG_DEBUG("Released GLTFLoader resources");
 }
 
-const std::vector<MeshAsset>&
-GLTFLoader::Meshes() const
+SharedPtr<GLTFScene>
+GLTFLoader::Load(std::filesystem::path& path)
 {
-  return meshes_;
-}
+  LOG_TRACE("GLTFLoader::Load");
+  if (!std::filesystem::exists(path)) {
+    LOG_ERROR("path {} is invalid", path.c_str());
+    return nullptr;
+  }
 
-const std::vector<SDL_GPUTexture*>&
-GLTFLoader::Textures() const
-{
-  return textures_;
-}
+  if (!CreateDefaultSampler()) {
+    LOG_ERROR("Couldn't create default sampler");
+    return nullptr;
+  }
+  if (!CreateDefaultTexture()) {
+    LOG_ERROR("Couldn't create default texture");
+    return nullptr;
+  }
 
-const std::vector<SDL_GPUSampler*>&
-GLTFLoader::Samplers() const
-{
-  return samplers_;
-}
-const std::vector<SharedPtr<GLTFPbrMaterial>>&
-GLTFLoader::Materials() const
-{
-  return materials_;
+  if (!Parse(path)) {
+    LOG_ERROR("Coudln't parse asset `{}`", path.c_str())
+    return nullptr;
+  }
+
+  SharedPtr<GLTFScene> ret = MakeShared<GLTFScene>(path, this);
+
+  if (LoadResources(ret.get())) {
+    return nullptr;
+  }
+  return ret;
 }
 
 bool
-GLTFLoader::Load()
+GLTFLoader::Load(GLTFScene* scene, std::filesystem::path& path)
 {
   LOG_TRACE("GLTFLoader::Load");
-  if (!std::filesystem::exists(path_)) {
-    LOG_ERROR("path {} is invalid", path_.c_str());
+  if (!std::filesystem::exists(path)) {
+    LOG_ERROR("path {} is invalid", path.c_str());
     return false;
   }
 
@@ -143,7 +137,20 @@ GLTFLoader::Load()
     return false;
   }
 
-  auto data = fastgltf::GltfDataBuffer::FromPath(path_);
+  if (!Parse(path)) {
+    LOG_ERROR("Coudln't parse asset `{}`", path.c_str())
+    return false;
+  }
+
+  scene->Path = path;
+  scene->loader_ = this;
+  return LoadResources(scene);
+}
+
+bool
+GLTFLoader::Parse(std::filesystem::path& path)
+{
+  auto data = fastgltf::GltfDataBuffer::FromPath(path);
   if (data.error() != fastgltf::Error::None) {
     LOG_ERROR("couldn't load gltf from path");
     return false;
@@ -154,9 +161,7 @@ GLTFLoader::Load()
   fastgltf::Asset gltf;
   fastgltf::Parser parser{};
 
-  auto asset = parser.loadGltf(data.get(), path_.parent_path(), gltfOptions);
-  // auto asset =
-  //   parser.loadGltfBinary(data.get(), path_.parent_path(), gltfOptions);
+  auto asset = parser.loadGltf(data.get(), path.parent_path(), gltfOptions);
   if (auto error = asset.error(); error != fastgltf::Error::None) {
     LOG_ERROR("couldn't parse binary gltf");
     return false;
@@ -169,48 +174,50 @@ GLTFLoader::Load()
   }
 
   asset_ = std::move(asset.get());
-
-  loaded_ = LoadSamplers();
-  if (!loaded_) {
-    LOG_ERROR("Couldn't load samplers from GLTF");
-    return false;
-  }
-  LOG_DEBUG("Loaded {} GLTF samplers", samplers_.size());
-  assert(samplers_.size() != 0);
-
-  loaded_ = LoadImageData();
-  if (!loaded_) {
-    LOG_ERROR("Couldn't load images from GLTF");
-    return false;
-  }
-  LOG_DEBUG("Loaded GLTF images");
-
-  loaded_ = LoadMaterials();
-  if (!loaded_) {
-    LOG_ERROR("Couldn't load materials from GLTF");
-    return false;
-  }
-  LOG_DEBUG("Loaded GLTF materials");
-
-  loaded_ = LoadVertexData();
-  if (!loaded_) {
-    LOG_ERROR("Couldn't load vertex data from GLTF");
-    return false;
-  }
-  LOG_DEBUG("Loaded GLTF meshes");
-
-  loaded_ = LoadNodes();
-  if (!loaded_) {
-    LOG_ERROR("Couldn't load nodes from GLTF");
-    return false;
-  }
-  LOG_DEBUG("Loaded GLTF Nodes");
-
-  return loaded_;
+  return true;
 }
 
 bool
-GLTFLoader::LoadVertexData()
+GLTFLoader::LoadResources(GLTFScene* ret)
+{
+  if (!LoadSamplers(ret)) {
+    LOG_ERROR("Couldn't load samplers from GLTF");
+    return false;
+  }
+  LOG_DEBUG("GLTFLoader: Loaded {} Samplers", ret->samplers_.size());
+
+  if (!LoadImageData(ret)) {
+    LOG_ERROR("Couldn't load images from GLTF");
+    return false;
+  }
+  LOG_DEBUG("GLTFLoader: Loaded {} Images", ret->textures_.size());
+
+  if (!LoadMaterials(ret)) {
+    LOG_ERROR("Couldn't load materials from GLTF");
+    return false;
+  }
+  LOG_DEBUG("GLTFLoader: Loaded {} Materials", ret->materials_.size());
+
+  if (!LoadVertexData(ret)) {
+    LOG_ERROR("Couldn't load vertex data from GLTF");
+    return false;
+  }
+  LOG_DEBUG("GLTFLoader: Loaded {} Meshes", ret->meshes_.size());
+
+  if (!LoadNodes(ret)) {
+    LOG_ERROR("Couldn't load nodes from GLTF");
+    return false;
+  }
+  LOG_DEBUG("GLTFLoader: Loaded {} parent nodes ({} total)",
+            ret->parent_nodes_.size(),
+            ret->all_nodes_.size());
+
+  ret->loaded_ = true;
+  return true;
+}
+
+bool
+GLTFLoader::LoadVertexData(GLTFScene* ret)
 {
   LOG_TRACE("GLTFLoader::LoadVertexData");
   if (asset_.meshes.empty()) {
@@ -219,8 +226,8 @@ GLTFLoader::LoadVertexData()
   }
   // construct our Mesh vector at the same time we fill vertices and indices
   // buffers
-  meshes_ = std::vector<MeshAsset>{};
-  meshes_.reserve(asset_.meshes.size());
+  ret->meshes_ = std::vector<MeshAsset>{};
+  ret->meshes_.reserve(asset_.meshes.size());
   std::vector<PosNormalUvVertex> vertices;
   std::vector<u32> indices;
 
@@ -294,9 +301,10 @@ GLTFLoader::LoadVertexData()
 
       { // material:
         if (p.materialIndex.has_value()) {
-          newGeometry.material = materials_[p.materialIndex.value()]->Build();
+          newGeometry.material =
+            ret->materials_[p.materialIndex.value()]->Build();
         } else {
-          newGeometry.material = materials_[0]->Build();
+          newGeometry.material = ret->materials_[0]->Build();
         }
         newGeometry.material->Pipeline =
           static_cast<CubeProgram*>(program_)->ScenePipeline;
@@ -311,22 +319,22 @@ GLTFLoader::LoadVertexData()
       LOG_ERROR("Couldn't upload mesh data");
       return false;
     }
-    meshes_.emplace_back(newMesh);
+    ret->meshes_.emplace_back(newMesh);
   }
   return true;
 }
 
 bool
-GLTFLoader::LoadImageData()
+GLTFLoader::LoadImageData(GLTFScene* ret)
 {
   LOG_TRACE("GLTFLoader::LoadImageData");
 
-  textures_ = std::vector<SDL_GPUTexture*>{};
-  textures_.reserve(asset_.textures.size());
+  ret->textures_ = std::vector<SDL_GPUTexture*>{};
+  ret->textures_.reserve(asset_.textures.size());
 
   if (asset_.images.empty()) {
     LOG_WARN("LoadImageData: GLTF has no images");
-    textures_.push_back(default_texture_);
+    ret->textures_.push_back(default_texture_);
     return true;
   }
 
@@ -337,7 +345,7 @@ GLTFLoader::LoadImageData()
       []([[maybe_unused]] auto& arg) {LOG_WARN("No URI source");},
       [&](fastgltf::sources::URI& filePath) {
         LOG_DEBUG("Loading image from URI");
-        LoadImageFromURI(imgData, filePath);
+        LoadImageFromURI(imgData, ret->Path.parent_path(), filePath);
       },
       [&](fastgltf::sources::Vector& vec) {
         LOG_DEBUG("Loading image from Vector");
@@ -365,11 +373,11 @@ GLTFLoader::LoadImageData()
       LOG_WARN("Falling back to default textue");
       tex = default_texture_;
     }
-    textures_.push_back(tex);
+    ret->textures_.push_back(tex);
   }
 
-  for(const auto& tex : asset_.textures) {
-    if(!tex.imageIndex.has_value()) {
+  for (const auto& tex : asset_.textures) {
+    if (!tex.imageIndex.has_value()) {
       LOG_WARN("Texture doesn't have image.");
       if (tex.basisuImageIndex.has_value()) {
         LOG_WARN("It has a baseiu");
@@ -383,13 +391,14 @@ GLTFLoader::LoadImageData()
     }
   }
 
-  LOG_DEBUG("{} textures were created", textures_.size());
-  assert(textures_.size() == asset_.images.size());
-  return !textures_.empty();
+  LOG_DEBUG("{} textures were created", ret->textures_.size());
+  assert(ret->textures_.size() == asset_.images.size());
+  return !ret->textures_.empty();
 }
 
 void
 GLTFLoader::LoadImageFromURI(LoadedImage& img,
+                             std::filesystem::path parent_path,
                              const fastgltf::sources::URI& URI)
 {
   LOG_TRACE("GLTFLoader::LoadImageFromURI");
@@ -402,12 +411,12 @@ GLTFLoader::LoadImageFromURI(LoadedImage& img,
   // NOTE: Setting req_comp to 4 will force padding of missing alpha in case of
   // 3 channels. Forced it to 4 because there's no SDL equivalent to
   // VK_FORMAT_R8G8B8_UNORM as support is meh accross drivers it seems.
-  img.data = stbi_load(
-    std::format("{}/{}", path_.parent_path().c_str(), localPath).c_str(),
-    &img.w,
-    &img.h,
-    &img.nrChannels,
-    4);
+  img.data =
+    stbi_load(std::format("{}/{}", parent_path.c_str(), localPath).c_str(),
+              &img.w,
+              &img.h,
+              &img.nrChannels,
+              4);
 }
 
 void
@@ -534,16 +543,16 @@ GLTFLoader::CreateAndUploadTexture(LoadedImage& img)
 }
 
 bool
-GLTFLoader::LoadSamplers()
+GLTFLoader::LoadSamplers(GLTFScene* ret)
 {
   LOG_TRACE("GLTFLoader::LoadSamplers");
 
-  samplers_ = std::vector<SDL_GPUSampler*>{};
-  samplers_.reserve(asset_.samplers.size());
+  ret->samplers_ = std::vector<SDL_GPUSampler*>{};
+  ret->samplers_.reserve(asset_.samplers.size());
 
   if (asset_.samplers.empty()) {
     LOG_WARN("GLTF asset has no samplers. falling back to default");
-    samplers_.push_back(default_sampler_);
+    ret->samplers_.push_back(default_sampler_);
     return true;
   }
 
@@ -565,9 +574,9 @@ GLTFLoader::LoadSamplers()
       LOG_ERROR("Couldn't create gpu sampler: {}", SDL_GetError());
       s = default_sampler_;
     }
-    samplers_.push_back(s);
+    ret->samplers_.push_back(s);
   }
-  assert(samplers_.size() == asset_.samplers.size());
+  assert(ret->samplers_.size() == asset_.samplers.size());
   return true;
 }
 
@@ -576,7 +585,7 @@ GLTFLoader::CreateDefaultSampler()
 {
   LOG_TRACE("GLTFLoader::CreateDefaultSampler");
   if (default_sampler_) {
-    LOG_WARN("Re-creating default sampler");
+    LOG_DEBUG("Skipping default sampler recreation");
   }
   static SDL_GPUSamplerCreateInfo sampler_info{};
   { // Matches GLTF default spec. Linear mipmap + linear filter = trilinear
@@ -602,7 +611,8 @@ GLTFLoader::CreateDefaultTexture()
 {
   LOG_TRACE("GLTFLoader::CreateDefaultTexture");
   if (default_texture_) {
-    LOG_WARN("Re-creating default texture");
+    LOG_DEBUG("Skipping default texture recreation");
+    return true;
   }
 
   { // Create texture
@@ -653,16 +663,16 @@ GLTFLoader::CreateDefaultTexture()
 }
 
 bool
-GLTFLoader::LoadMaterials()
+GLTFLoader::LoadMaterials(GLTFScene* ret)
 {
   LOG_TRACE("GLTFLoader::LoadMaterials");
   if (asset_.materials.size() == 0) {
     LOG_WARN("No materials found in GLTF");
-    materials_.push_back(default_material_);
+    ret->materials_.push_back(default_material_);
     return true;
   }
-  materials_ = std::vector<SharedPtr<GLTFPbrMaterial>>{};
-  materials_.reserve(asset_.materials.size());
+  ret->materials_ = std::vector<SharedPtr<GLTFPbrMaterial>>{};
+  ret->materials_.reserve(asset_.materials.size());
 
   for (auto& mat : asset_.materials) {
     auto newMat = std::make_shared<GLTFPbrMaterial>();
@@ -702,58 +712,58 @@ GLTFLoader::LoadMaterials()
 
     if (mat.pbrData.baseColorTexture.has_value()) {
       auto tex_idx = mat.pbrData.baseColorTexture.value().textureIndex;
-      assert(tex_idx < textures_.size());
+      assert(tex_idx < ret->textures_.size());
 
       auto sampler_idx = asset_.textures[tex_idx].samplerIndex.value_or(0);
-      assert(sampler_idx < samplers_.size());
-      newMat->BaseColorTexture = textures_[tex_idx];
-      newMat->BaseColorSampler = samplers_[sampler_idx];
+      assert(sampler_idx < ret->samplers_.size());
+      newMat->BaseColorTexture = ret->textures_[tex_idx];
+      newMat->BaseColorSampler = ret->samplers_[sampler_idx];
     } else {
       newMat->BaseColorTexture = default_texture_;
       newMat->BaseColorSampler = default_sampler_;
     }
     if (mat.pbrData.metallicRoughnessTexture.has_value()) {
       auto tex_idx = mat.pbrData.metallicRoughnessTexture.value().textureIndex;
-      assert(tex_idx < textures_.size());
+      assert(tex_idx < ret->textures_.size());
 
       auto sampler_idx = asset_.textures[tex_idx].samplerIndex.value_or(0);
-      assert(sampler_idx < samplers_.size());
-      newMat->MetalRoughTexture = textures_[tex_idx];
-      newMat->MetalRoughSampler = samplers_[sampler_idx];
+      assert(sampler_idx < ret->samplers_.size());
+      newMat->MetalRoughTexture = ret->textures_[tex_idx];
+      newMat->MetalRoughSampler = ret->samplers_[sampler_idx];
     } else {
       newMat->MetalRoughTexture = default_texture_;
       newMat->MetalRoughSampler = default_sampler_;
     }
     if (mat.normalTexture.has_value()) {
       auto tex_idx = mat.normalTexture.value().textureIndex;
-      assert(tex_idx < textures_.size());
+      assert(tex_idx < ret->textures_.size());
 
       auto sampler_idx = asset_.textures[tex_idx].samplerIndex.value_or(0);
-      assert(sampler_idx < samplers_.size());
-      newMat->NormalTexture = textures_[tex_idx];
-      newMat->NormalSampler = samplers_[sampler_idx];
+      assert(sampler_idx < ret->samplers_.size());
+      newMat->NormalTexture = ret->textures_[tex_idx];
+      newMat->NormalSampler = ret->samplers_[sampler_idx];
     } else {
       newMat->NormalTexture = default_texture_;
       newMat->NormalSampler = default_sampler_;
     }
 
-    materials_.push_back(newMat);
+    ret->materials_.push_back(newMat);
   }
-  LOG_DEBUG("Loaded {} materials", materials_.size());
+  LOG_DEBUG("Loaded {} materials", ret->materials_.size());
   return true;
 }
 
 bool
-GLTFLoader::LoadNodes()
+GLTFLoader::LoadNodes(GLTFScene* ret)
 {
-  LOG_TRACE("GLTFLoader::CreateDefaultMaterial");
+  LOG_TRACE("GLTFLoader::LoadNodes");
   if (asset_.nodes.size() == 0) {
     LOG_ERROR("GLTF has no nodes (TODO: handle it as it's valid)")
     return false;
   }
-  ParentNodes = std::vector<SharedPtr<SceneNode>>{};
-  AllNodes = std::vector<SharedPtr<SceneNode>>{};
-  AllNodes.reserve(asset_.nodes.size());
+  ret->parent_nodes_ = std::vector<SharedPtr<SceneNode>>{};
+  ret->all_nodes_ = std::vector<SharedPtr<SceneNode>>{};
+  ret->all_nodes_.reserve(asset_.nodes.size());
 
   // Create node for every node in scene
   for (const fastgltf::Node& node : asset_.nodes) {
@@ -762,7 +772,7 @@ GLTFLoader::LoadNodes()
     if (node.meshIndex.has_value()) {
       NewNode = std::make_shared<MeshNode>();
       auto idx = node.meshIndex.value();
-      static_cast<MeshNode*>(NewNode.get())->Mesh = &meshes_[idx];
+      static_cast<MeshNode*>(NewNode.get())->Mesh = &ret->meshes_[idx];
     } else {
       NewNode = std::make_shared<SceneNode>();
     }
@@ -790,41 +800,28 @@ GLTFLoader::LoadNodes()
                    NewNode->LocalMatrix = tm * rm * sm;
                  } },
                node.transform);
-    AllNodes.push_back(NewNode);
+    ret->all_nodes_.push_back(NewNode);
   }
 
   // Iterate again to build hierarchy
   for (u64 i = 0; i < asset_.nodes.size(); ++i) {
     const fastgltf::Node& gltfnode = asset_.nodes[i];
-    const SharedPtr<SceneNode>& node = AllNodes[i];
+    const SharedPtr<SceneNode>& node = ret->all_nodes_[i];
 
     for (const u64 childIdx : gltfnode.children) {
-      node->Children.push_back(AllNodes[childIdx]);
-      AllNodes[childIdx]->Parent = node;
+      node->Children.push_back(ret->all_nodes_[childIdx]);
+      ret->all_nodes_[childIdx]->Parent = node;
     }
   }
 
   // Iterate again to identify Parent Nodes
-  for (const auto& node : AllNodes) {
+  for (const auto& node : ret->all_nodes_) {
     if (node->Parent.lock() == nullptr) {
-      ParentNodes.push_back(node);
+      ret->parent_nodes_.push_back(node);
       node->Update(glm::mat4{ 1.0f }); // Bubble down world matrix computation
     }
   }
-
-  LOG_DEBUG("Loaded GLTF Nodes ({} parent, {} total)",
-            ParentNodes.size(),
-            AllNodes.size());
-
   return true;
-}
-
-void
-GLTFLoader::Draw(glm::mat4 matrix, std::vector<RenderItem>& draws)
-{
-  for (const auto& parent : ParentNodes) {
-    parent->Draw(matrix, draws);
-  }
 }
 
 void
@@ -832,7 +829,8 @@ GLTFLoader::CreateDefaultMaterial()
 {
   LOG_TRACE("GLTFLoader::CreateDefaultMaterial");
   if (default_material_.get() != nullptr) {
-    LOG_WARN("Re-creating default material");
+    LOG_DEBUG("Skipping default material recreation");
+    return;
   }
   default_material_ = std::make_shared<GLTFPbrMaterial>();
 }

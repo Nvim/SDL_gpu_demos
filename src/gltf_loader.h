@@ -2,6 +2,7 @@
 
 #include "fastgltf/types.hpp"
 #include "src/gltf_material.h"
+#include "src/gltf_scene.h"
 #include "src/logger.h"
 #include "src/program.h"
 #include "src/rendersystem.h"
@@ -18,34 +19,38 @@ struct LoadedImage
   u8* data{ nullptr };
 };
 
-class GLTFLoader : public IRenderable
+class GLTFLoader
 {
+  friend class GLTFScene;
+
 public:
-  GLTFLoader(Program* program, std::filesystem::path path);
+  GLTFLoader(Program* program);
   ~GLTFLoader();
 
-  bool Load();
-  void Draw(glm::mat4 matrix, std::vector<RenderItem>& draws) override;
-  void Release();
+  bool Load(GLTFScene* scene, std::filesystem::path& path);
+  SharedPtr<GLTFScene> Load(std::filesystem::path& path);
+  void Release(); // Callable dtor, must be destroyed before app
 
 public:
-  const std::vector<MeshAsset>& Meshes() const;
-  const std::vector<SDL_GPUTexture*>& Textures() const;
-  const std::vector<SDL_GPUSampler*>& Samplers() const;
-  const std::vector<SharedPtr<GLTFPbrMaterial>>& Materials() const;
-  std::vector<std::shared_ptr<SceneNode>> ParentNodes;
-  std::vector<std::shared_ptr<SceneNode>> AllNodes;
-
 private:
-  bool LoadVertexData();
-  // send buffer data to GPU
+  bool LoadVertexData(GLTFScene* ret);
+  bool LoadSamplers(GLTFScene* ret);
+  bool LoadImageData(GLTFScene* ret);
+  bool LoadMaterials(GLTFScene* ret);
+  bool LoadNodes(GLTFScene* ret);
+
+  bool Parse(std::filesystem::path& path);
+  bool LoadResources(GLTFScene* ret);
+
+  // TODO: some of these utils should be moved somewhere else
   template<typename V, typename I>
   bool UploadBuffers(MeshBuffers* buffers,
                      std::vector<V> vertices,
                      std::vector<I> indices);
 
-  bool LoadImageData();
-  void LoadImageFromURI(LoadedImage& img, const fastgltf::sources::URI& URI);
+  void LoadImageFromURI(LoadedImage& img,
+                        std::filesystem::path parent_path,
+                        const fastgltf::sources::URI& URI);
   void LoadImageFromVector(LoadedImage& img,
                            const fastgltf::sources::Vector& vector);
   void LoadImageFromBufferView(LoadedImage& img,
@@ -53,27 +58,16 @@ private:
                                const fastgltf::Buffer& buffer);
   SDL_GPUTexture* CreateAndUploadTexture(LoadedImage& img);
   bool CreateDefaultTexture();
-  bool LoadSamplers();
   bool CreateDefaultSampler();
-  bool LoadMaterials();
   void CreateDefaultMaterial();
-  bool LoadNodes();
 
 private:
-  Program* program_; // TODO: decouple program from renderer, and hold pointer
-                     // to renderer instead
+  Program* program_;
   fastgltf::Asset asset_;
-  std::filesystem::path path_;
-  bool loaded_{ false };
 
   SDL_GPUSampler* default_sampler_{ nullptr };
   SDL_GPUTexture* default_texture_{ nullptr };
   SharedPtr<GLTFPbrMaterial> default_material_{ nullptr };
-
-  std::vector<MeshAsset> meshes_;
-  std::vector<SDL_GPUTexture*> textures_;
-  std::vector<SDL_GPUSampler*> samplers_;
-  std::vector<SharedPtr<GLTFPbrMaterial>> materials_;
 };
 
 template<typename V, typename I>
