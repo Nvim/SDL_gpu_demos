@@ -5,6 +5,9 @@
 #include <SDL3/SDL_log.h>
 #include <SDL3/SDL_stdinc.h>
 #include <cassert>
+#include <chrono>
+#include <filesystem>
+#include <future>
 #include <imgui/backends/imgui_impl_sdl3.h>
 #include <imgui/backends/imgui_impl_sdlgpu3.h>
 #include <imgui/imgui.h>
@@ -14,6 +17,8 @@
 #include <glm/ext/matrix_float4x4.hpp>
 #include <glm/ext/matrix_transform.hpp>
 #include <glm/gtc/constants.hpp>
+#include <thread>
+#include <utility>
 #include <vector>
 
 #include "src/camera.h"
@@ -79,7 +84,7 @@ CubeProgram::CubeProgram(SDL_GPUDevice* device,
 CubeProgram::~CubeProgram()
 {
   LOG_TRACE("Destroying app");
-  scene_.Release();
+  scene_->Release();
 
   // TODO: segfaults:
   RELEASE_IF(vertex_, SDL_ReleaseGPUShader);
@@ -190,12 +195,13 @@ CubeProgram::Init()
     return false;
   }
   LOG_DEBUG("Created pipelines");
-  if (!loader_.Load(&scene_, scene_path)) {
+  scene_ = loader_.Load(scene_path_);
+  if (!scene_.get()) {
     LOG_CRITICAL("Couldn't initialize GLTF loader");
     return false;
   }
-  assert(!scene_.Meshes().empty());
-  LOG_INFO("Loaded {} meshes", scene_.Meshes().size());
+  assert(!scene_->Meshes().empty());
+  LOG_INFO("Loaded {} meshes", scene_->Meshes().size());
 
   if (!CreateSceneRenderTargets()) {
     LOG_ERROR("Couldn't create render target textures!");
@@ -222,8 +228,8 @@ CubeProgram::ShouldQuit()
 bool
 CubeProgram::Poll()
 {
+  // Poll input
   SDL_Event evt;
-
   while (SDL_PollEvent(&evt)) {
     ImGui_ImplSDL3_ProcessEvent(&evt);
     if (evt.type == SDL_EVENT_QUIT) {
@@ -232,7 +238,18 @@ CubeProgram::Poll()
       if (evt.key.key == SDLK_ESCAPE) {
         quit = true;
       }
+      if (evt.key.key == SDLK_SPACE) {
+        ChangeScene();
+      }
     }
+  }
+
+  // Poll future:
+  if (scene_future_.valid() && scene_future_.wait_for(std::chrono::nanoseconds(
+                                 0)) == std::future_status::ready) {
+    is_loading_scene = false;
+    scene_->Release();
+    scene_ = scene_future_.get();
   }
   return true;
 }
@@ -248,7 +265,7 @@ CubeProgram::UpdateScene()
   }
   global_transform_.Touched = true;
 
-  for (const auto& node : scene_.ParentNodes()) {
+  for (const auto& node : scene_->ParentNodes()) {
     node->Update(global_transform_.Matrix());
   }
   camera_.Update();
@@ -310,7 +327,7 @@ CubeProgram::Draw()
     SDL_SetGPUViewport(scenePass, &scene_vp);
 
     std::vector<RenderItem> draws;
-    scene_.Draw(glm::mat4{ 1.0f }, draws);
+    scene_->Draw(glm::mat4{ 1.0f }, draws);
     for (const auto& draw : draws) {
       assert(draw.VertexBuffer != nullptr);
       assert(draw.IndexBuffer != nullptr);
@@ -353,6 +370,21 @@ CubeProgram::Draw()
 
   SDL_SubmitGPUCommandBuffer(cmdbuf);
   return true;
+}
+
+void
+CubeProgram::ChangeScene()
+{
+  if (is_loading_scene) {
+    LOG_WARN("a scene is already loading, ignoring request");
+    return;
+  }
+  LOG_INFO("loading scene {}", alt_scene_path_.c_str());
+  scene_future_ = std::async([this]() {
+    std::swap(scene_path_, alt_scene_path_);
+    return loader_.Load(scene_path_);
+  });
+  is_loading_scene = true;
 }
 
 bool

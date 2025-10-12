@@ -2,6 +2,7 @@
 
 #include <SDL3/SDL_gpu.h>
 #include <SDL3/SDL_stdinc.h>
+#include <future>
 #include <imgui/imgui.h>
 
 #include "camera.h"
@@ -80,6 +81,7 @@ private:
   bool CreateSceneRenderTargets();
   ImDrawData* DrawGui();
   void UpdateScene();
+  void ChangeScene();
 
 private:
   // Internals:
@@ -88,12 +90,16 @@ private:
   Camera camera_{ glm::radians(60.0f), 640 / 480.f, .1f, 100.f };
   Skybox skybox_{ "resources/textures/skybox", Window, Device };
   GLTFLoader loader_{ this };
-  std::filesystem::path scene_path{
-    "resources/models/DamagedHelmet/DamagedHelmet.gltf"
-    // "resources/models/CubeGLTF/Cube.gltf"
-    // "resources/models/BarramundiFish.glb"
+  std::filesystem::path scene_path_{
+    // "resources/models/DamagedHelmet/DamagedHelmet.gltf"
+    "resources/models/BarramundiFish.glb"
   };
-  GLTFScene scene_{};
+  std::filesystem::path alt_scene_path_{
+    "resources/models/CubeGLTF/Cube.gltf"
+  };
+  UniquePtr<GLTFScene> scene_{};
+  bool is_loading_scene{ false };
+  std::future<UniquePtr<GLTFScene>> scene_future_;
   const char* vertex_path_;
   const char* fragment_path_;
   const int vp_width_{ 640 };

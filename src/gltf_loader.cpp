@@ -88,7 +88,7 @@ GLTFLoader::Release()
   LOG_DEBUG("Released GLTFLoader resources");
 }
 
-SharedPtr<GLTFScene>
+UniquePtr<GLTFScene>
 GLTFLoader::Load(std::filesystem::path& path)
 {
   LOG_TRACE("GLTFLoader::Load");
@@ -111,9 +111,9 @@ GLTFLoader::Load(std::filesystem::path& path)
     return nullptr;
   }
 
-  SharedPtr<GLTFScene> ret = MakeShared<GLTFScene>(path, this);
+  UniquePtr<GLTFScene> ret = MakeUnique<GLTFScene>(path, this);
 
-  if (LoadResources(ret.get())) {
+  if (!LoadResources(ret.get())) {
     return nullptr;
   }
   return ret;

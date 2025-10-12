@@ -28,7 +28,7 @@ public:
   ~GLTFLoader();
 
   bool Load(GLTFScene* scene, std::filesystem::path& path);
-  SharedPtr<GLTFScene> Load(std::filesystem::path& path);
+  UniquePtr<GLTFScene> Load(std::filesystem::path& path);
   void Release(); // Callable dtor, must be destroyed before app
 
 public:
