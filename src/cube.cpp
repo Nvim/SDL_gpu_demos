@@ -23,6 +23,7 @@
 
 #include "src/camera.h"
 #include "src/logger.h"
+#include "src/types.h"
 #include "util.h"
 
 CubeProgram::CubeProgram(SDL_GPUDevice* device,
@@ -195,7 +196,7 @@ CubeProgram::Init()
     return false;
   }
   LOG_DEBUG("Created pipelines");
-  scene_ = loader_.Load(scene_path_);
+  scene_ = loader_.Load(default_scene_path_);
   if (!scene_.get()) {
     LOG_CRITICAL("Couldn't initialize GLTF loader");
     return false;
@@ -238,19 +239,31 @@ CubeProgram::Poll()
       if (evt.key.key == SDLK_ESCAPE) {
         quit = true;
       }
-      if (evt.key.key == SDLK_SPACE) {
-        ChangeScene();
-      }
+      // if (evt.key.key == SDLK_SPACE) {
+      //   ChangeScene();
+      // }
     }
+  }
+
+  if (scene_picker_.CurrentAsset != scene_->Path && !is_loading_scene) {
+    ChangeScene();
   }
 
   // Poll future:
   if (scene_future_.valid() && scene_future_.wait_for(std::chrono::nanoseconds(
                                  0)) == std::future_status::ready) {
     is_loading_scene = false;
+    auto ret = scene_future_.get();
+    if (ret == nullptr) {
+      LOG_ERROR("Failed loading scene `{}`",
+                scene_picker_.CurrentAsset.c_str());
+      scene_picker_.CurrentAsset = scene_->Path; // restore former scene
+      return true;
+    }
     scene_->Release();
-    scene_ = scene_future_.get();
+    scene_ = std::move(ret);
   }
+
   return true;
 }
 
@@ -379,12 +392,14 @@ CubeProgram::ChangeScene()
     LOG_WARN("a scene is already loading, ignoring request");
     return;
   }
-  LOG_INFO("loading scene {}", alt_scene_path_.c_str());
-  scene_future_ = std::async([this]() {
-    std::swap(scene_path_, alt_scene_path_);
-    return loader_.Load(scene_path_);
-  });
   is_loading_scene = true;
+  LOG_INFO("loading scene {}", scene_picker_.CurrentAsset.c_str());
+  scene_future_ = std::async([this]() { 
+      std::this_thread::sleep_for(std::chrono::seconds(3));
+      return loader_.Load(scene_picker_.CurrentAsset);
+    // return ret;
+      // return std::unique_ptr<GLTFScene>(nullptr);
+    });
 }
 
 bool
@@ -515,6 +530,8 @@ CubeProgram::DrawGui()
       ImGui::Checkbox("Skybox", &skybox_toggle_);
       ImGui::End();
     }
+
+    scene_picker_.Render(is_loading_scene);
   }
 
   ImGui::Render();

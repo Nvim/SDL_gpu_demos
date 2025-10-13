@@ -10,6 +10,7 @@
 #include "skybox.h"
 #include "src/gltf_loader.h"
 #include "src/gltf_scene.h"
+#include "src/scene_picker.h"
 #include "transform.h"
 #include "util.h"
 
@@ -57,6 +58,8 @@ struct InstancingCfg
   Uint32 dimension = 1; // instance count per side
 };
 
+const std::filesystem::path MODELS_DIR("resources/models");
+
 class CubeProgram : public Program
 {
 public:
@@ -90,14 +93,11 @@ private:
   Camera camera_{ glm::radians(60.0f), 640 / 480.f, .1f, 100.f };
   Skybox skybox_{ "resources/textures/skybox", Window, Device };
   GLTFLoader loader_{ this };
-  std::filesystem::path scene_path_{
-    // "resources/models/DamagedHelmet/DamagedHelmet.gltf"
-    "resources/models/BarramundiFish.glb"
-  };
-  std::filesystem::path alt_scene_path_{
-    "resources/models/CubeGLTF/Cube.gltf"
+  std::filesystem::path default_scene_path_{
+    MODELS_DIR / "DamagedHelmet/DamagedHelmet.gltf"
   };
   UniquePtr<GLTFScene> scene_{};
+  ScenePicker scene_picker_{ MODELS_DIR, default_scene_path_ };
   bool is_loading_scene{ false };
   std::future<UniquePtr<GLTFScene>> scene_future_;
   const char* vertex_path_;
