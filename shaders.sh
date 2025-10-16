@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-SRC=resources/shaders/src
+SRC=src/shaders
 OUT=resources/shaders/compiled
 
 mkdir -p "$OUT"

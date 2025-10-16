@@ -8,6 +8,7 @@
 #include <chrono>
 #include <filesystem>
 #include <future>
+#include <glm/ext/vector_float3.hpp>
 #include <imgui/backends/imgui_impl_sdl3.h>
 #include <imgui/backends/imgui_impl_sdlgpu3.h>
 #include <imgui/imgui.h>
@@ -17,7 +18,6 @@
 #include <glm/ext/matrix_float4x4.hpp>
 #include <glm/ext/matrix_transform.hpp>
 #include <glm/gtc/constants.hpp>
-#include <thread>
 #include <utility>
 #include <vector>
 
@@ -72,7 +72,7 @@ CubeProgram::CubeProgram(SDL_GPUDevice* device,
     rotations_[1] = Rotation{
       "Y Axis",
       &global_transform_.rotation_.y,
-      1.f,
+      0.f,
     };
     rotations_[2] = Rotation{
       "Z Axis",
@@ -128,6 +128,9 @@ CubeProgram::Init()
   SDL_GPUColorTargetDescription color_descs[1]{};
   color_descs[0].format = SDL_GetGPUSwapchainTextureFormat(Device, Window);
 
+  static_assert(sizeof(glm::vec4) == 16);
+  static_assert(sizeof(glm::vec3) == 12);
+  static_assert(sizeof(glm::vec2) == 8);
   SDL_GPUVertexAttribute vertex_attributes[] = {
     { .location = 0,
       .buffer_slot = 0,
@@ -136,16 +139,20 @@ CubeProgram::Init()
     { .location = 1,
       .buffer_slot = 0,
       .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3,
-      .offset = sizeof(float) * 3 },
+      .offset = sizeof(glm::vec3) },
     { .location = 2,
       .buffer_slot = 0,
       .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2,
-      .offset = sizeof(float) * 6 }
+      .offset = sizeof(glm::vec3) * 2 },
+    { .location = 3,
+      .buffer_slot = 0,
+      .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4,
+      .offset = sizeof(glm::vec3) * 2 + sizeof(glm::vec2) },
   };
 
   SDL_GPUVertexBufferDescription vertex_desc[] = { {
     .slot = 0,
-    .pitch = sizeof(PosNormalUvVertex),
+    .pitch = sizeof(PosNormalColorUvVertex),
     .input_rate = SDL_GPU_VERTEXINPUTRATE_VERTEX,
     .instance_step_rate = 0,
   } };
@@ -213,7 +220,7 @@ CubeProgram::Init()
   global_transform_.translation_ = { 0.f, 0.f, 0.0f };
   global_transform_.scale_ = { 1.f, 1.f, 1.f };
 
-  camera_.Position = glm::vec3{ 0.f, 1.f, -4.f };
+  camera_.Position = glm::vec3{ 0.f, .5f, 3.5f };
   camera_.Target = glm::vec3{ 0.f, 0.f, 0.f };
 
   LOG_INFO("Initialized application");
@@ -274,9 +281,9 @@ CubeProgram::UpdateScene()
     if (rot.speed != 0.f) {
       *rot.axis =
         glm::mod(*rot.axis + DeltaTime * rot.speed, glm::two_pi<float>());
+      global_transform_.Touched = true;
     }
   }
-  global_transform_.Touched = true;
 
   for (const auto& node : scene_->ParentNodes()) {
     node->Update(global_transform_.Matrix());
@@ -317,11 +324,20 @@ CubeProgram::Draw()
   auto draw_data = DrawGui();
   auto d = instance_cfg.dimension;
   auto total_instances = d * d * d;
+  // {
+  //   glm::mat4 viewproj;
+  //   glm::mat4 cam_model;
+  //   glm::vec4 camera_world;
+  //   glm::vec4 sun_dir;
+  //   glm::vec4 sun_color;
+  //   f32 spread;
+  //   u32 dimension;
+  // };
   SceneDataBinding scene_data{ vp,
                                camera_.Model(),
                                glm::vec4{ camera_.Position, 0.f },
                                glm::vec4{ 30.f, 20.f, 0.f, 0.f },
-                               glm::vec4{ .9f, .9f, .9f, 1.f },
+                               glm::vec4{ .9f, .9f, .9f, .1f },
                                instance_cfg.spread,
                                instance_cfg.dimension };
 
@@ -394,12 +410,12 @@ CubeProgram::ChangeScene()
   }
   is_loading_scene = true;
   LOG_INFO("loading scene {}", scene_picker_.CurrentAsset.c_str());
-  scene_future_ = std::async([this]() { 
-      std::this_thread::sleep_for(std::chrono::seconds(3));
-      return loader_.Load(scene_picker_.CurrentAsset);
+  scene_future_ = std::async([this]() {
+    // std::this_thread::sleep_for(std::chrono::seconds(3));
+    return loader_.Load(scene_picker_.CurrentAsset);
     // return ret;
-      // return std::unique_ptr<GLTFScene>(nullptr);
-    });
+    // return std::unique_ptr<GLTFScene>(nullptr);
+  });
 }
 
 bool
@@ -514,9 +530,17 @@ CubeProgram::DrawGui()
         }
         ImGui::TreePop();
       }
-      if (ImGui::TreeNode("Spin Cube")) {
+      if (ImGui::TreeNode("Spin")) {
         for (auto& rot : rotations_) {
           ImGui::InputFloat(rot.name, &rot.speed);
+        }
+        ImGui::TreePop();
+      }
+      f32 scale = global_transform_.scale_.x;
+      if (ImGui::TreeNode("Scale")) {
+        if (ImGui::InputFloat("All axis", &scale)) {
+          global_transform_.scale_ = glm::vec3{ scale };
+          global_transform_.Touched = true;
         }
         ImGui::TreePop();
       }

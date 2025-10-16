@@ -36,6 +36,7 @@ private:
   bool LoadVertexData(GLTFScene* ret);
   bool LoadSamplers(GLTFScene* ret);
   bool LoadImageData(GLTFScene* ret);
+  bool LoadTexture(GLTFScene* ret, u64 texture_index, bool srgb);
   bool LoadMaterials(GLTFScene* ret);
   bool LoadNodes(GLTFScene* ret);
 
@@ -56,7 +57,7 @@ private:
   void LoadImageFromBufferView(LoadedImage& img,
                                const fastgltf::BufferView& view,
                                const fastgltf::Buffer& buffer);
-  SDL_GPUTexture* CreateAndUploadTexture(LoadedImage& img);
+  SDL_GPUTexture* CreateAndUploadTexture(LoadedImage& img, bool srgb);
   bool CreateDefaultTexture();
   bool CreateDefaultSampler();
   void CreateDefaultMaterial();

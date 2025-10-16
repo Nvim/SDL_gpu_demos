@@ -46,6 +46,9 @@ set(SPDLOG_BUILD_TESTS OFF CACHE "" BOOL)
 set(SPDLOG_BUILD_SHARED OFF CACHE "" BOOL)
 add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/spdlog")
 
+# SDL
+# add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/SDL")
+
 # Project executable
 add_executable(${PROJECT_NAME})
 file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")

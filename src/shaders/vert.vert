@@ -6,10 +6,12 @@
 layout(location = 0) in vec3 inPos;
 layout(location = 1) in vec3 inNormal;
 layout(location = 2) in vec2 inUv;
+layout(location = 3) in vec4 inColor;
 
-layout(location = 0) out vec2 outUv; // depends on vertex
+layout(location = 0) out vec3 outFragPos; // depends on model matrix
 layout(location = 1) out vec3 outNormal; // depends on vertex
-layout(location = 2) out vec3 outFragPos; // depends on model matrix
+layout(location = 2) out vec4 outColor; // depends on vertex
+layout(location = 3) out vec2 outUv; // depends on vertex
 
 // Data global to whole scene (120 bytes data, 8 to pad)
 layout(std140, set = 1, binding = 0) uniform uSceneData {
@@ -24,6 +26,7 @@ layout(std140, set = 1, binding = 1) uniform uDrawData {
 void main()
 {
     outUv = inUv;
+    outColor = inColor;
     outNormal = mat3(transpose(inverse(mat_m))) * inNormal;
     outNormal = (mat_m * vec4(inNormal, 0.f)).xyz;
 

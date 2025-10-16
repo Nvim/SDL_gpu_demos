@@ -16,8 +16,11 @@ enum class UBOBindingType
 // UBO on Fragment shader side
 struct MaterialDataBinding
 {
-  glm::vec4 color_factors;
-  glm::vec4 metal_rough_factors;
+  glm::vec4 color_factors; // 0-15
+  f32 metal_factor;        // 16-19
+  f32 rough_factor;        // 20-23
+  u32 feature_flags;       // 23-27
+  f32 __pad[1];            // 27-31
 };
 
 template<typename T>

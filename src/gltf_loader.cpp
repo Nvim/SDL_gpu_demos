@@ -1,11 +1,13 @@
 #include "gltf_loader.h"
 #include "fastgltf/math.hpp"
 #include "logger.h"
+#include "shaders/material_features.h"
 #include "src/cube.h"
 #include "src/rendersystem.h"
 #include "src/types.h"
 #include <SDL3/SDL_error.h>
 #include <SDL3/SDL_gpu.h>
+#include <limits>
 #define GLM_ENABLE_EXPERIMENTAL 1
 #include <glm/ext/matrix_transform.hpp>
 #include <glm/ext/quaternion_common.hpp>
@@ -186,11 +188,13 @@ GLTFLoader::LoadResources(GLTFScene* ret)
   }
   LOG_DEBUG("GLTFLoader: Loaded {} Samplers", ret->samplers_.size());
 
-  if (!LoadImageData(ret)) {
-    LOG_ERROR("Couldn't load images from GLTF");
-    return false;
-  }
-  LOG_DEBUG("GLTFLoader: Loaded {} Images", ret->textures_.size());
+  // if (!LoadImageData(ret)) {
+  //   LOG_ERROR("Couldn't load images from GLTF");
+  //   return false;
+  // }
+  ret->textures_ = std::vector<SDL_GPUTexture*>{};
+  ret->textures_.reserve(asset_.textures.size());
+  // LOG_DEBUG("GLTFLoader: Loaded {} Images", ret->textures_.size());
 
   if (!LoadMaterials(ret)) {
     LOG_ERROR("Couldn't load materials from GLTF");
@@ -228,7 +232,7 @@ GLTFLoader::LoadVertexData(GLTFScene* ret)
   // buffers
   ret->meshes_ = std::vector<MeshAsset>{};
   ret->meshes_.reserve(asset_.meshes.size());
-  std::vector<PosNormalUvVertex> vertices;
+  std::vector<PosNormalColorUvVertex> vertices;
   std::vector<u32> indices;
 
   for (auto& mesh : asset_.meshes) {
@@ -256,33 +260,17 @@ GLTFLoader::LoadVertexData(GLTFScene* ret)
           });
       }
 
-      { // load vertex positions
+      { // load positions
         fastgltf::Accessor& posAccessor =
           asset_.accessors[p.findAttribute("POSITION")->accessorIndex];
         vertices.resize(vertices.size() + posAccessor.count);
 
         fastgltf::iterateAccessorWithIndex<glm::vec3>(
           asset_, posAccessor, [&](glm::vec3 v, size_t index) {
-            PosNormalUvVertex newvtx;
-            newvtx.pos[0] = v.x;
-            newvtx.pos[1] = v.y;
-            newvtx.pos[2] = v.z;
+            PosNormalColorUvVertex newvtx;
+            newvtx.pos = v;
             vertices[initial_vtx + index] = newvtx;
           });
-      }
-
-      { // load vertex UVs
-        auto attr = p.findAttribute("TEXCOORD_0");
-        if (attr != p.attributes.end()) {
-          fastgltf::iterateAccessorWithIndex<glm::vec2>(
-            asset_,
-            asset_.accessors[attr->accessorIndex],
-            [&](glm::vec2 v, size_t index) {
-              vertices[initial_vtx + index].uv[0] = v.x;
-              vertices[initial_vtx + index].uv[1] = v.y;
-              // LOG_TRACE("{},{}", v.x, v.y);
-            });
-        }
       }
 
       { // load normals:
@@ -292,9 +280,31 @@ GLTFLoader::LoadVertexData(GLTFScene* ret)
             asset_,
             asset_.accessors[attr->accessorIndex],
             [&](glm::vec3 v, size_t index) {
-              vertices[initial_vtx + index].normal[0] = v.x;
-              vertices[initial_vtx + index].normal[1] = v.y;
-              vertices[initial_vtx + index].normal[2] = v.z;
+              vertices[initial_vtx + index].normal = v;
+            });
+        }
+      }
+
+      { // load color:
+        auto attr = p.findAttribute("COLOR_0");
+        if (attr != p.attributes.end()) {
+          fastgltf::iterateAccessorWithIndex<glm::vec4>(
+            asset_,
+            asset_.accessors[attr->accessorIndex],
+            [&](glm::vec4 v, size_t index) {
+              vertices[initial_vtx + index].color = v;
+            });
+        }
+      }
+
+      { // load UVs
+        auto attr = p.findAttribute("TEXCOORD_0");
+        if (attr != p.attributes.end()) {
+          fastgltf::iterateAccessorWithIndex<glm::vec2>(
+            asset_,
+            asset_.accessors[attr->accessorIndex],
+            [&](glm::vec2 v, size_t index) {
+              vertices[initial_vtx + index].uv = v;
             });
         }
       }
@@ -325,76 +335,133 @@ GLTFLoader::LoadVertexData(GLTFScene* ret)
 }
 
 bool
-GLTFLoader::LoadImageData(GLTFScene* ret)
+GLTFLoader::LoadTexture(GLTFScene* ret, u64 texture_index, bool srgb)
 {
-  LOG_TRACE("GLTFLoader::LoadImageData");
+  LOG_TRACE("GLTFLoader::LoadTexture");
 
-  ret->textures_ = std::vector<SDL_GPUTexture*>{};
-  ret->textures_.reserve(asset_.textures.size());
+  if (texture_index >= asset_.textures.size()) {
+    return false;
+  }
+  auto& tex = asset_.textures[texture_index];
+  u64 img_idx = tex.imageIndex.value_or(std::numeric_limits<u64>::max());
+  if (img_idx >= asset_.images.size()) {
+    return false;
+  }
+  auto& img = asset_.images[img_idx];
+  LoadedImage imgData{};
+  { // load image data to CPU
+    std::visit(fastgltf::visitor{
+                 // clang-format off
+        []([[maybe_unused]] auto& arg) {LOG_WARN("No URI source");},
+        [&](fastgltf::sources::URI& filePath) {
+          LOG_DEBUG("Loading image from URI");
+          LoadImageFromURI(imgData, ret->Path.parent_path(), filePath);
+        },
+        [&](fastgltf::sources::Vector& vec) {
+          LOG_DEBUG("Loading image from Vector");
+          LoadImageFromVector(imgData,vec);
+        },
+        [&](fastgltf::sources::BufferView& view) {
+          const auto& bufferView = asset_.bufferViews[view.bufferViewIndex];
+          const auto& buffer = asset_.buffers[bufferView.bufferIndex];
 
-  if (asset_.images.empty()) {
-    LOG_WARN("LoadImageData: GLTF has no images");
-    ret->textures_.push_back(default_texture_);
-    return true;
+          LoadImageFromBufferView(imgData, bufferView, buffer);
+        }
+      }, img.data);
+    // clang-format on
   }
 
-  for (auto& image : asset_.images) {
-    LoadedImage imgData{};
-    // clang-format off
-    std::visit(fastgltf::visitor{ 
-      []([[maybe_unused]] auto& arg) {LOG_WARN("No URI source");},
-      [&](fastgltf::sources::URI& filePath) {
-        LOG_DEBUG("Loading image from URI");
-        LoadImageFromURI(imgData, ret->Path.parent_path(), filePath);
-      },
-      [&](fastgltf::sources::Vector& vec) {
-        LOG_DEBUG("Loading image from Vector");
-        LoadImageFromVector(imgData,vec);
-      },
-      [&](fastgltf::sources::BufferView& view) {
-        const auto& bufferView = asset_.bufferViews[view.bufferViewIndex];
-        const auto& buffer = asset_.buffers[bufferView.bufferIndex];
-
-        LoadImageFromBufferView(imgData, bufferView, buffer);
-      }
-      }, image.data);
-    // clang-format on
-
+  { // create GPU texture
     SDL_GPUTexture* tex{ nullptr };
     if (imgData.data) {
       LOG_DEBUG("Creating texture");
-      tex = CreateAndUploadTexture(imgData);
-      if (!tex) {
-        LOG_WARN("Falling back to default textue");
-        tex = default_texture_;
-      }
+      tex = CreateAndUploadTexture(imgData, srgb);
       stbi_image_free(imgData.data);
-    } else {
+    }
+    if (!tex) {
       LOG_WARN("Falling back to default textue");
       tex = default_texture_;
     }
-    ret->textures_.push_back(tex);
+    // ret->textures_.push_back(tex);
+    ret->textures_[texture_index] = tex;
   }
-
-  for (const auto& tex : asset_.textures) {
-    if (!tex.imageIndex.has_value()) {
-      LOG_WARN("Texture doesn't have image.");
-      if (tex.basisuImageIndex.has_value()) {
-        LOG_WARN("It has a baseiu");
-      }
-      if (tex.ddsImageIndex.has_value()) {
-        LOG_WARN("It has a dds");
-      }
-      if (tex.webpImageIndex.has_value()) {
-        LOG_WARN("It has a webp");
-      }
-    }
-  }
-
-  LOG_DEBUG("{} textures were created", ret->textures_.size());
-  assert(ret->textures_.size() == asset_.images.size());
-  return !ret->textures_.empty();
+  return true;
 }
+
+// bool
+// GLTFLoader::LoadImageData(GLTFScene* ret)
+// {
+//   LOG_TRACE("GLTFLoader::LoadImageData");
+//
+//   ret->textures_ = std::vector<SDL_GPUTexture*>{};
+//   ret->textures_.reserve(asset_.textures.size());
+//
+//   if (asset_.images.empty()) {
+//     LOG_WARN("LoadImageData: GLTF has no images");
+//     ret->textures_.push_back(default_texture_);
+//     return true;
+//   }
+//
+//   for (auto& image : asset_.images) {
+//     LoadedImage imgData{};
+//     { // load image data to CPU
+//       std::visit(fastgltf::visitor{
+//                    // clang-format off
+//         []([[maybe_unused]] auto& arg) {LOG_WARN("No URI source");},
+//         [&](fastgltf::sources::URI& filePath) {
+//           LOG_DEBUG("Loading image from URI");
+//           LoadImageFromURI(imgData, ret->Path.parent_path(), filePath);
+//         },
+//         [&](fastgltf::sources::Vector& vec) {
+//           LOG_DEBUG("Loading image from Vector");
+//           LoadImageFromVector(imgData,vec);
+//         },
+//         [&](fastgltf::sources::BufferView& view) {
+//           const auto& bufferView = asset_.bufferViews[view.bufferViewIndex];
+//           const auto& buffer = asset_.buffers[bufferView.bufferIndex];
+//
+//           LoadImageFromBufferView(imgData, bufferView, buffer);
+//         }
+//       }, image.data);
+//       // clang-format on
+//     }
+//
+//     { // create GPU texture TODO: need to be done in material loading for
+//       // rgb/srgb
+//       SDL_GPUTexture* tex{ nullptr };
+//       if (imgData.data) {
+//         LOG_DEBUG("Creating texture");
+//         tex = CreateAndUploadTexture(imgData);
+//         stbi_image_free(imgData.data);
+//       }
+//       if (!tex) {
+//         LOG_WARN("Falling back to default textue");
+//         tex = default_texture_;
+//       }
+//       ret->textures_.push_back(tex);
+//     }
+//   }
+//
+//   // random asserts to delete
+//   for (const auto& tex : asset_.textures) {
+//     if (!tex.imageIndex.has_value()) {
+//       LOG_WARN("Texture doesn't have image.");
+//       if (tex.basisuImageIndex.has_value()) {
+//         LOG_WARN("It has a baseiu");
+//       }
+//       if (tex.ddsImageIndex.has_value()) {
+//         LOG_WARN("It has a dds");
+//       }
+//       if (tex.webpImageIndex.has_value()) {
+//         LOG_WARN("It has a webp");
+//       }
+//     }
+//   }
+
+// LOG_DEBUG("{} textures were created", ret->textures_.size());
+// assert(ret->textures_.size() == asset_.images.size());
+// return !ret->textures_.empty();
+// }
 
 void
 GLTFLoader::LoadImageFromURI(LoadedImage& img,
@@ -460,13 +527,13 @@ GLTFLoader::LoadImageFromBufferView(LoadedImage& img,
 
 // NOTE: 4 channels hardcoded here to match R8G8B8A8_UNORM format
 SDL_GPUTexture*
-GLTFLoader::CreateAndUploadTexture(LoadedImage& img)
+GLTFLoader::CreateAndUploadTexture(LoadedImage& img, bool srgb)
 {
   LOG_TRACE("GLTFLoader::CreateAndUploadTexture");
   auto device = program_->Device;
+  auto format = srgb ? SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM_SRGB
+                     : SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
 
-  // TODO: sRGB for baseColor/emissive
-  auto format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
   SDL_GPUTextureCreateInfo tex_info{};
   {
     tex_info.type = SDL_GPU_TEXTURETYPE_2D;
@@ -691,61 +758,35 @@ GLTFLoader::LoadMaterials(GLTFScene* ret)
 
     // template optional because fastgltf::NormalTextureInfo type is derived
     // from fastgltf::TextureInfo
-    // auto bindTexture = [&](const auto& opt_tex_info, PbrTextureFlag tex_type)
-    // {
-    //   // using TexInfoType = std::decay_t<decltype(*opt_tex_info)>;
-    //   if (opt_tex_info.has_value()) {
-    //     auto tex_idx = opt_tex_info.value().textureIndex;
-    //     assert(tex_idx < textures_.size());
-    //
-    //     auto sampler_idx = asset_.textures[tex_idx].samplerIndex.value_or(0);
-    //     assert(sampler_idx < samplers_.size());
-    //     newMat->SamplerBindings[CAST_FLAG(tex_type)] =
-    //       SDL_GPUTextureSamplerBinding{ textures_[tex_idx],
-    //                                     samplers_[sampler_idx] };
-    //   } else {
-    //     newMat->SamplerBindings[CAST_FLAG(tex_type)] =
-    //       SDL_GPUTextureSamplerBinding{ default_texture_, default_sampler_ };
-    //   }
-    // };
-    // bindTexture(mat.pbrData.baseColorTexture, PbrTextureFlag::BaseColor);
+    auto bindTexture = [&](const auto& opt_tex_info,
+                           SDL_GPUTexture** texture,
+                           SDL_GPUSampler** sampler,
+                           bool srgb = false) {
+      // using TexInfoType = std::decay_t<decltype(*opt_tex_info)>;
+      if (opt_tex_info.has_value()) {
+        auto tex_idx = opt_tex_info.value().textureIndex;
+        // assert(tex_idx < ret->textures_.size());
+        assert(LoadTexture(ret, tex_idx, srgb) == true);
 
-    if (mat.pbrData.baseColorTexture.has_value()) {
-      auto tex_idx = mat.pbrData.baseColorTexture.value().textureIndex;
-      assert(tex_idx < ret->textures_.size());
+        auto sampler_idx = asset_.textures[tex_idx].samplerIndex.value_or(0);
+        assert(sampler_idx < ret->samplers_.size());
+        *texture = ret->textures_[tex_idx];
+        *sampler = ret->samplers_[sampler_idx];
+      } else {
+        *texture = default_texture_;
+        *sampler = default_sampler_;
+      }
+    };
 
-      auto sampler_idx = asset_.textures[tex_idx].samplerIndex.value_or(0);
-      assert(sampler_idx < ret->samplers_.size());
-      newMat->BaseColorTexture = ret->textures_[tex_idx];
-      newMat->BaseColorSampler = ret->samplers_[sampler_idx];
-    } else {
-      newMat->BaseColorTexture = default_texture_;
-      newMat->BaseColorSampler = default_sampler_;
-    }
-    if (mat.pbrData.metallicRoughnessTexture.has_value()) {
-      auto tex_idx = mat.pbrData.metallicRoughnessTexture.value().textureIndex;
-      assert(tex_idx < ret->textures_.size());
-
-      auto sampler_idx = asset_.textures[tex_idx].samplerIndex.value_or(0);
-      assert(sampler_idx < ret->samplers_.size());
-      newMat->MetalRoughTexture = ret->textures_[tex_idx];
-      newMat->MetalRoughSampler = ret->samplers_[sampler_idx];
-    } else {
-      newMat->MetalRoughTexture = default_texture_;
-      newMat->MetalRoughSampler = default_sampler_;
-    }
-    if (mat.normalTexture.has_value()) {
-      auto tex_idx = mat.normalTexture.value().textureIndex;
-      assert(tex_idx < ret->textures_.size());
-
-      auto sampler_idx = asset_.textures[tex_idx].samplerIndex.value_or(0);
-      assert(sampler_idx < ret->samplers_.size());
-      newMat->NormalTexture = ret->textures_[tex_idx];
-      newMat->NormalSampler = ret->samplers_[sampler_idx];
-    } else {
-      newMat->NormalTexture = default_texture_;
-      newMat->NormalSampler = default_sampler_;
-    }
+    bindTexture(mat.pbrData.baseColorTexture,
+                &(newMat->BaseColorTexture),
+                &(newMat->BaseColorSampler),
+                true);
+    bindTexture(mat.pbrData.metallicRoughnessTexture,
+                &(newMat->MetalRoughTexture),
+                &(newMat->MetalRoughSampler));
+    bindTexture(
+      mat.normalTexture, &(newMat->NormalTexture), &(newMat->NormalSampler));
 
     ret->materials_.push_back(newMat);
   }

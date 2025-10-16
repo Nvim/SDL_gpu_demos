@@ -1,6 +1,7 @@
 #pragma once
 
 #include "material.h"
+#include "shaders/material_features.h"
 
 #define CAST_FLAG(f) static_cast<u8>(f)
 
@@ -13,6 +14,7 @@ struct GLTFPbrMaterial final : public IMaterialBuilder
   glm::vec4 EmissiveFactor{ 1.f };
   f32 MetallicFactor{ 1.f };
   f32 RoughnessFactor{ 1.f };
+  u32 FeatureFlags{ 0x00 }; // bitfield
 
   // GPU resources:
   SDL_GPUTexture* BaseColorTexture{ nullptr };
