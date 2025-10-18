@@ -14,13 +14,14 @@ layout(location = 3) in vec2 inUv;
 layout(set = 2, binding = 0) uniform sampler2D TexDiffuse;
 layout(set = 2, binding = 1) uniform sampler2D TexMetalRough;
 layout(set = 2, binding = 2) uniform sampler2D TexNormal;
+layout(set = 2, binding = 3) uniform sampler2D TexAO;
 
 // Data global to whole scene (120 bytes data, 8 to pad)
 layout(std140, set = 3, binding = 0) uniform uSceneData {
     SceneData scene;
 };
 
-// Material-specific data
+// Material-specific data. TODO: add normal scaling and AO strength params
 layout(set = 3, binding = 1) uniform uMaterialData {
     vec4 color_factors;
     float metal_factor;
@@ -59,13 +60,14 @@ void main()
     vec4 diffuse_color = mat.color_factors;
     float metalness = mat.metal_factor;
     float roughness = mat.metal_factor;
+    float ao = 1.0;
     vec3 F0 = vec3(0.04); // default for dielectrics, updated if material has metalness
 
     // ** FEATURE TEST ** //
     if (bool(mat.feature_flags & HAS_DIFFUSE_TEX)) {
-        diffuse_color.rgb *= pow(texture(TexDiffuse, inUv).rgb, vec3(2.2));
-        // diffuse_color *= texture(TexDiffuse, inUv);
-    }
+        diffuse_color *= texture(TexDiffuse, inUv);
+        // diffuse_color.rgb = pow(diffuse_color.rgb, vec3(2.2));
+    } 
     // diffuse_color *= inColor;
 
     if (bool(mat.feature_flags & HAS_METALROUGH_TEX)) {
@@ -74,7 +76,11 @@ void main()
         roughness = metalrough.y * mat.rough_factor;
     }
 
-    // TODO: normal, emissive & occlusion maps
+    if (bool(mat.feature_flags & HAS_OCCLUSION_TEX)) {
+        ao = texture(TexAO, inUv).r;
+    }
+
+    // TODO: normal & emissive maps
 
     // ** COMPUTE LOOP ** //
     vec3 Lo = vec3(0.0); // accumulated result from all lights. TODO: vec4 for alpha
@@ -82,9 +88,9 @@ void main()
         vec3 light_dir = normalize(SunLight.direction);
         vec3 hvec = normalize(view_dir + light_dir);
 
-        float distance = length(SunLight.direction);
-        float attenuation = 1.0 / (distance * distance);
-        vec3 radiance = SunLight.diffuse /* * attenuation */;
+        // float distance = length(SunLight.direction);
+        // float attenuation = 1.0 / (distance * distance);
+        vec3 radiance = SunLight.diffuse /* * attenuation */; // skip attenuation because directional light
 
         float D = DistributionGGX(normal, hvec, roughness);
         float G = GeometrySmith(normal, view_dir, light_dir, roughness);
@@ -101,14 +107,16 @@ void main()
 
         // TODO: use diffuse color's alpha
         Lo += (kd * diffuse_color.rgb / PI + specular) * radiance * ndotl;
-        // Lo += specular;
+        Lo += specular;
     }
 
     // ambient
-    // vec3 ambient = SunLight.ambient * texture(TexDiffuse, inUv).rgb;
-    vec3 result = Lo;
+    float ao_strength = 1.0; // TODO: use strength param from model
+    ao = 1.0 + ao_strength * (ao - 1.0);
+    vec3 ambient = vec3(0.03) * diffuse_color.rgb * ao;
+    vec3 result = Lo; 
 
-    // gamma correction
+    // tone mapping + gamma correction
     result = result / (result + vec3(1.0));
     result = pow(result, vec3(1.0 / 2.2));
 

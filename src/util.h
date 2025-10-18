@@ -35,9 +35,8 @@ struct PosNormalColorUvVertex
   glm::vec3 pos;
   glm::vec3 normal{ 0.f };
   glm::vec2 uv{ 0.f };
-  glm::vec4 color {0.f};
+  glm::vec4 color{ 0.f };
 };
-
 
 #define RELEASE_IF(ptr, release_func)                                          \
   if (ptr != nullptr) {                                                        \

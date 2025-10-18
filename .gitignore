@@ -3,3 +3,4 @@ build
 resources/shaders/compiled/*.spv
 .cache
 imgui.ini
+*.cap

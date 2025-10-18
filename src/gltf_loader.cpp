@@ -192,9 +192,7 @@ GLTFLoader::LoadResources(GLTFScene* ret)
   //   LOG_ERROR("Couldn't load images from GLTF");
   //   return false;
   // }
-  ret->textures_ = std::vector<SDL_GPUTexture*>{};
-  ret->textures_.reserve(asset_.textures.size());
-  // LOG_DEBUG("GLTFLoader: Loaded {} Images", ret->textures_.size());
+  ret->textures_ = std::vector<SDL_GPUTexture*>{ asset_.textures.size() };
 
   if (!LoadMaterials(ret)) {
     LOG_ERROR("Couldn't load materials from GLTF");
@@ -754,6 +752,16 @@ GLTFLoader::LoadMaterials(GLTFScene* ret)
       newMat->EmissiveFactor.z = mat.emissiveFactor.z();
       newMat->MetallicFactor = mat.pbrData.metallicFactor;
       newMat->RoughnessFactor = mat.pbrData.roughnessFactor;
+
+      // optional ones:
+      if (mat.normalTexture.has_value()) {
+        newMat->NormalFactor = mat.normalTexture.value().scale;
+        newMat->FeatureFlags |= HAS_NORMAL_FACT;
+      }
+      if (mat.occlusionTexture.has_value()) {
+        newMat->OcclusionFactor = mat.occlusionTexture.value().strength;
+        newMat->FeatureFlags |= HAS_OCCLUSION_FACT;
+      }
     }
 
     // template optional because fastgltf::NormalTextureInfo type is derived
@@ -761,6 +769,7 @@ GLTFLoader::LoadMaterials(GLTFScene* ret)
     auto bindTexture = [&](const auto& opt_tex_info,
                            SDL_GPUTexture** texture,
                            SDL_GPUSampler** sampler,
+                           int flag,
                            bool srgb = false) {
       // using TexInfoType = std::decay_t<decltype(*opt_tex_info)>;
       if (opt_tex_info.has_value()) {
@@ -772,6 +781,7 @@ GLTFLoader::LoadMaterials(GLTFScene* ret)
         assert(sampler_idx < ret->samplers_.size());
         *texture = ret->textures_[tex_idx];
         *sampler = ret->samplers_[sampler_idx];
+        newMat->FeatureFlags |= flag;
       } else {
         *texture = default_texture_;
         *sampler = default_sampler_;
@@ -781,13 +791,23 @@ GLTFLoader::LoadMaterials(GLTFScene* ret)
     bindTexture(mat.pbrData.baseColorTexture,
                 &(newMat->BaseColorTexture),
                 &(newMat->BaseColorSampler),
+                HAS_DIFFUSE_TEX,
                 true);
     bindTexture(mat.pbrData.metallicRoughnessTexture,
                 &(newMat->MetalRoughTexture),
-                &(newMat->MetalRoughSampler));
-    bindTexture(
-      mat.normalTexture, &(newMat->NormalTexture), &(newMat->NormalSampler));
+                &(newMat->MetalRoughSampler),
+                HAS_METALROUGH_TEX);
+    bindTexture(mat.normalTexture,
+                &(newMat->NormalTexture),
+                &(newMat->NormalSampler),
+                HAS_NORMAL_TEX);
 
+    bindTexture(mat.occlusionTexture,
+                &(newMat->OcclusionTexture),
+                &(newMat->OcclusionSampler),
+                HAS_OCCLUSION_TEX);
+
+    // assert(newMat->FeatureFlags & HAS_DIFFUSE_TEX);
     ret->materials_.push_back(newMat);
   }
   LOG_DEBUG("Loaded {} materials", ret->materials_.size());

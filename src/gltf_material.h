@@ -14,6 +14,8 @@ struct GLTFPbrMaterial final : public IMaterialBuilder
   glm::vec4 EmissiveFactor{ 1.f };
   f32 MetallicFactor{ 1.f };
   f32 RoughnessFactor{ 1.f };
+  f32 NormalFactor{ 1.f };
+  f32 OcclusionFactor{ 1.f };
   u32 FeatureFlags{ 0x00 }; // bitfield
 
   // GPU resources:
@@ -25,6 +27,9 @@ struct GLTFPbrMaterial final : public IMaterialBuilder
 
   SDL_GPUTexture* NormalTexture{ nullptr };
   SDL_GPUSampler* NormalSampler{ nullptr };
+
+  SDL_GPUTexture* OcclusionTexture{ nullptr };
+  SDL_GPUSampler* OcclusionSampler{ nullptr };
 
   virtual SharedPtr<MaterialInstance> Build() override;
 };

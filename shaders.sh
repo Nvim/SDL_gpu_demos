@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set -euo pipefail
 
 SRC=src/shaders
 OUT=resources/shaders/compiled

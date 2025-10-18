@@ -18,6 +18,7 @@ GLTFPbrMaterial::Build()
   CREATE_BINDING(BaseColor, BaseColorTexture, BaseColorSampler);
   CREATE_BINDING(MetalRough, MetalRoughTexture, MetalRoughSampler);
   CREATE_BINDING(Normal, NormalTexture, NormalSampler);
+  CREATE_BINDING(Occlusion, OcclusionTexture, OcclusionSampler);
 
   MaterialDataBinding binding{};
   {
