@@ -68,7 +68,7 @@ void main()
         diffuse_color *= texture(TexDiffuse, inUv);
         // diffuse_color.rgb = pow(diffuse_color.rgb, vec3(2.2));
     } 
-    // diffuse_color *= inColor;
+    diffuse_color *= inColor;
 
     if (bool(mat.feature_flags & HAS_METALROUGH_TEX)) {
         vec2 metalrough = texture(TexMetalRough, inUv).gb;

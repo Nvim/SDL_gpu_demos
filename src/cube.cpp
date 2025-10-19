@@ -165,8 +165,9 @@ CubeProgram::Init()
     {
       auto& state = pipelineCreateInfo.vertex_input_state;
       state.vertex_buffer_descriptions = vertex_desc;
-      state.num_vertex_buffers = 1, state.vertex_attributes = vertex_attributes;
-      state.num_vertex_attributes = 3;
+      state.num_vertex_buffers = 1;
+      state.vertex_attributes = vertex_attributes;
+      state.num_vertex_attributes = 4;
     }
     {
       auto& state = pipelineCreateInfo.rasterizer_state;
