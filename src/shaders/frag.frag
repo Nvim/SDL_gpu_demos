@@ -9,12 +9,14 @@ layout(location = 0) in vec3 inFragPos;
 layout(location = 1) in vec3 inNormal;
 layout(location = 2) in vec4 inColor;
 layout(location = 3) in vec2 inUv;
+layout(location = 4) in mat3 inTBN;
 // layout(location = 3) in vec3 inViewPos;
 
 layout(set = 2, binding = 0) uniform sampler2D TexDiffuse;
 layout(set = 2, binding = 1) uniform sampler2D TexMetalRough;
 layout(set = 2, binding = 2) uniform sampler2D TexNormal;
 layout(set = 2, binding = 3) uniform sampler2D TexAO;
+layout(set = 2, binding = 4) uniform sampler2D TexEmissive;
 
 // Data global to whole scene (120 bytes data, 8 to pad)
 layout(std140, set = 3, binding = 0) uniform uSceneData {
@@ -36,26 +38,52 @@ layout(set = 3, binding = 1) uniform uMaterialData {
 
 const float PI = 3.14159265359;
 
+// struct {
+//     vec3 direction;
+//     vec3 ambient;
+//     vec3 diffuse;
+//     // vec3 specular;
+// } SunLight = {
+//         sun_dir.xyz,
+//         vec3(sun_color.w),
+//         sun_color.xyz,
+//     };
+
 struct {
-    vec3 direction;
-    vec3 ambient;
-    vec3 diffuse;
-    // vec3 specular;
-} SunLight = {
-        sun_dir.xyz,
-        vec3(sun_color.w),
-        sun_color.xyz,
-    };
+    vec3 world_pos;
+    vec3 color;
+} PointLight = {
+    vec3(10.f, 8.f, 10.f),
+    vec3(1.f, 1.f, 1.f),
+};
 
 float DistributionGGX(vec3 normal, vec3 hvec, float roughness);
 float GeometrySchlickGGX(float NdotV, float roughness);
 float GeometrySmith(vec3 normal, vec3 view_dir, vec3 light_dir, float roughness);
 vec3 FresnelSchlick(float cosTheta, vec3 F0);
 
+vec3 getNormalFromMap()
+{
+    vec3 tangentNormal = texture(TexNormal, inUv).xyz * 2.0 - 1.0;
+
+    vec3 Q1  = dFdx(inFragPos);
+    vec3 Q2  = dFdy(inFragPos);
+    vec2 st1 = dFdx(inUv);
+    vec2 st2 = dFdy(inUv);
+
+    vec3 N   = normalize(inNormal);
+    vec3 T  = normalize(Q1*st2.t - Q2*st1.t);
+    vec3 B  = -normalize(cross(N, T));
+    mat3 TBN = mat3(T, B, N);
+
+    return normalize(TBN * tangentNormal);
+}
+
 void main()
 {
     vec3 normal = normalize(inNormal);
     vec3 view_dir = normalize(camera_world.xyz - inFragPos);
+    vec3 emissive = vec3(0.0);
 
     vec4 diffuse_color = mat.color_factors;
     float metalness = mat.metal_factor;
@@ -66,14 +94,29 @@ void main()
     // ** FEATURE TEST ** //
     if (bool(mat.feature_flags & HAS_DIFFUSE_TEX)) {
         diffuse_color *= texture(TexDiffuse, inUv);
-        // diffuse_color.rgb = pow(diffuse_color.rgb, vec3(2.2));
-    } 
+    }
     diffuse_color *= inColor;
 
     if (bool(mat.feature_flags & HAS_METALROUGH_TEX)) {
-        vec2 metalrough = texture(TexMetalRough, inUv).gb;
-        metalness = metalrough.x * mat.metal_factor;
-        roughness = metalrough.y * mat.rough_factor;
+        vec3 metalrough = texture(TexMetalRough, inUv).rgb;
+        metalness = metalrough.b * mat.metal_factor;
+        roughness = metalrough.g * mat.rough_factor;
+        roughness = clamp(roughness, 0.04, 1.0);
+        roughness = roughness*roughness;
+    }
+
+    if (bool(mat.feature_flags & HAS_NORMAL_TEX)) {
+        // TODO: Scaling
+        // normal = texture(TexNormal, inUv).rgb;
+        // normal = normal * 2.0 - 1.0; // [0, 1] -> [-1, 1]
+        // normal = normalize(inTBN * normal);
+        normal = getNormalFromMap();
+        // OutFragColor = vec4(normal, 1.0);
+        // return;
+    }
+    if (bool(mat.feature_flags & HAS_EMISSIVE_TEX)) {
+        // TODO: factor
+        emissive = texture(TexEmissive, inUv).rgb;
     }
 
     if (bool(mat.feature_flags & HAS_OCCLUSION_TEX)) {
@@ -85,12 +128,13 @@ void main()
     // ** COMPUTE LOOP ** //
     vec3 Lo = vec3(0.0); // accumulated result from all lights. TODO: vec4 for alpha
     for (int i = 0; i < 1; i++) {
-        vec3 light_dir = normalize(SunLight.direction);
+        vec3 light_dir = normalize(PointLight.world_pos - camera_world.xyz);
         vec3 hvec = normalize(view_dir + light_dir);
 
-        // float distance = length(SunLight.direction);
-        // float attenuation = 1.0 / (distance * distance);
-        vec3 radiance = SunLight.diffuse /* * attenuation */; // skip attenuation because directional light
+        float distance = length(PointLight.world_pos - camera_world.xyz);
+        float attenuation = 1.0 / (distance);
+        // vec3 radiance = PointLight.color * attenuation ; // skip attenuation because directional light
+        vec3 radiance = PointLight.color;
 
         float D = DistributionGGX(normal, hvec, roughness);
         float G = GeometrySmith(normal, view_dir, light_dir, roughness);
@@ -114,7 +158,7 @@ void main()
     float ao_strength = 1.0; // TODO: use strength param from model
     ao = 1.0 + ao_strength * (ao - 1.0);
     vec3 ambient = vec3(0.03) * diffuse_color.rgb * ao;
-    vec3 result = Lo; 
+    vec3 result = Lo + ambient + emissive; 
 
     // tone mapping + gamma correction
     result = result / (result + vec3(1.0));

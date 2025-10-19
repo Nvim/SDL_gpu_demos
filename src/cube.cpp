@@ -142,17 +142,21 @@ CubeProgram::Init()
       .offset = sizeof(glm::vec3) },
     { .location = 2,
       .buffer_slot = 0,
-      .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2,
-      .offset = sizeof(glm::vec3) * 2 },
+      .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3,
+      .offset = 2 * sizeof(glm::vec3) },
     { .location = 3,
       .buffer_slot = 0,
+      .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2,
+      .offset = 3 * sizeof(glm::vec3) },
+    { .location = 4,
+      .buffer_slot = 0,
       .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4,
-      .offset = sizeof(glm::vec3) * 2 + sizeof(glm::vec2) },
+      .offset = 3 * sizeof(glm::vec3) + sizeof(glm::vec2) },
   };
 
   SDL_GPUVertexBufferDescription vertex_desc[] = { {
     .slot = 0,
-    .pitch = sizeof(PosNormalColorUvVertex),
+    .pitch = sizeof(PosNormalTangentColorUvVertex),
     .input_rate = SDL_GPU_VERTEXINPUTRATE_VERTEX,
     .instance_step_rate = 0,
   } };
@@ -167,7 +171,7 @@ CubeProgram::Init()
       state.vertex_buffer_descriptions = vertex_desc;
       state.num_vertex_buffers = 1;
       state.vertex_attributes = vertex_attributes;
-      state.num_vertex_attributes = 4;
+      state.num_vertex_attributes = 5;
     }
     {
       auto& state = pipelineCreateInfo.rasterizer_state;

@@ -14,6 +14,7 @@ enum class PbrTextureFlag : u8
   MetalRough = 1,
   Normal = 2,
   Occlusion = 3,
+  Emissive = 4,
   COUNT
 };
 

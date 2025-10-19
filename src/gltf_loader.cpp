@@ -7,6 +7,7 @@
 #include "src/types.h"
 #include <SDL3/SDL_error.h>
 #include <SDL3/SDL_gpu.h>
+#include <glm/geometric.hpp>
 #include <limits>
 #define GLM_ENABLE_EXPERIMENTAL 1
 #include <glm/ext/matrix_transform.hpp>
@@ -218,6 +219,49 @@ GLTFLoader::LoadResources(GLTFScene* ret)
   return true;
 }
 
+// Modify the `vertices` vector in-place to add tangent vectors.
+// NOTE: vertices need to have Position and UVs attributes set
+void
+set_tangents(std::vector<PosNormalTangentColorUvVertex>& vertices,
+             std::vector<u32>& indices)
+{
+  assert(indices.size() != 0);
+  assert(indices.size() % 3 == 0);
+  for (unsigned int i = 0; i < indices.size(); i += 3) {
+    auto& v0 = vertices[indices[i]];
+    auto& v1 = vertices[indices[i + 1]];
+    auto& v2 = vertices[indices[i + 2]];
+
+    glm::vec3 edge1 = v1.pos - v0.pos;
+    glm::vec3 edge2 = v2.pos - v0.pos;
+
+    float deltaU1 = v1.uv.x - v0.uv.x;
+    float deltaV1 = v1.uv.y - v0.uv.y;
+    float deltaU2 = v2.uv.x - v0.uv.x;
+    float deltaV2 = v2.uv.y - v0.uv.y;
+
+    float f = 1.0f / (deltaU1 * deltaV2 - deltaU2 * deltaV1);
+
+    glm::vec3 tangent;
+    // , bitangent;
+
+    tangent.x = f * (deltaV2 * edge1.x - deltaV1 * edge2.x);
+    tangent.y = f * (deltaV2 * edge1.y - deltaV1 * edge2.y);
+    tangent.z = f * (deltaV2 * edge1.z - deltaV1 * edge2.z);
+    // bitangent.x = f * (-deltaU2 * edge1.x + deltaU1 * edge2.x);
+    // bitangent.y = f * (-deltaU2 * edge1.y + deltaU1 * edge2.y);
+    // bitangent.z = f * (-deltaU2 * edge1.z + deltaU1 * edge2.z);
+
+    v0.tangent += tangent;
+    v1.tangent += tangent;
+    v2.tangent += tangent;
+  }
+
+  for (unsigned int i = 0; i < vertices.size(); i++) {
+    vertices[i].tangent = glm::normalize(vertices[i].tangent);
+  }
+}
+
 bool
 GLTFLoader::LoadVertexData(GLTFScene* ret)
 {
@@ -230,7 +274,7 @@ GLTFLoader::LoadVertexData(GLTFScene* ret)
   // buffers
   ret->meshes_ = std::vector<MeshAsset>{};
   ret->meshes_.reserve(asset_.meshes.size());
-  std::vector<PosNormalColorUvVertex> vertices;
+  std::vector<PosNormalTangentColorUvVertex> vertices;
   std::vector<u32> indices;
 
   for (auto& mesh : asset_.meshes) {
@@ -238,6 +282,7 @@ GLTFLoader::LoadVertexData(GLTFScene* ret)
     newMesh.Name = mesh.name.c_str();
     vertices.clear();
     indices.clear();
+    bool need_tangents{ false };
 
     for (auto&& p : mesh.primitives) {
       Geometry newGeometry{
@@ -265,9 +310,7 @@ GLTFLoader::LoadVertexData(GLTFScene* ret)
 
         fastgltf::iterateAccessorWithIndex<glm::vec3>(
           asset_, posAccessor, [&](glm::vec3 v, size_t index) {
-            PosNormalColorUvVertex newvtx;
-            newvtx.pos = v;
-            vertices[initial_vtx + index] = newvtx;
+            vertices[initial_vtx + index].pos = v;
           });
       }
 
@@ -309,8 +352,11 @@ GLTFLoader::LoadVertexData(GLTFScene* ret)
 
       { // material:
         if (p.materialIndex.has_value()) {
-          newGeometry.material =
-            ret->materials_[p.materialIndex.value()]->Build();
+          auto& mat = ret->materials_[p.materialIndex.value()];
+          newGeometry.material = mat->Build();
+          if (!need_tangents) {
+            need_tangents = (mat->FeatureFlags & HAS_NORMAL_TEX);
+          }
         } else {
           newGeometry.material = ret->materials_[0]->Build();
         }
@@ -322,6 +368,13 @@ GLTFLoader::LoadVertexData(GLTFScene* ret)
       LOG_DEBUG("New geometry. Total Verts: {}, Total Indices: {}",
                 vertices.size(),
                 indices.size());
+    }
+
+    // Lazy pre-compute tangents only if necessary:
+    // Iterate all vertices after they're all loaded
+    if (need_tangents) {
+      LOG_WARN("Computing tangents for mesh {}", mesh.name.c_str());
+      set_tangents(vertices, indices);
     }
     if (!UploadBuffers(&newMesh.Buffers, vertices, indices)) {
       LOG_ERROR("Couldn't upload mesh data");
@@ -806,6 +859,10 @@ GLTFLoader::LoadMaterials(GLTFScene* ret)
                 &(newMat->OcclusionTexture),
                 &(newMat->OcclusionSampler),
                 HAS_OCCLUSION_TEX);
+    bindTexture(mat.emissiveTexture,
+                &(newMat->EmissiveTexture),
+                &(newMat->EmissiveSampler),
+                HAS_EMISSIVE_TEX);
 
     // assert(newMat->FeatureFlags & HAS_DIFFUSE_TEX);
     ret->materials_.push_back(newMat);

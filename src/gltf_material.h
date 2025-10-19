@@ -31,5 +31,8 @@ struct GLTFPbrMaterial final : public IMaterialBuilder
   SDL_GPUTexture* OcclusionTexture{ nullptr };
   SDL_GPUSampler* OcclusionSampler{ nullptr };
 
+  SDL_GPUTexture* EmissiveTexture{ nullptr };
+  SDL_GPUSampler* EmissiveSampler{ nullptr };
+
   virtual SharedPtr<MaterialInstance> Build() override;
 };
