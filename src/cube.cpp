@@ -1,15 +1,12 @@
+#include "pch.h"
 #include "cube.h"
 
-#include <SDL3/SDL.h>
-#include <SDL3/SDL_gpu.h>
-#include <SDL3/SDL_log.h>
-#include <SDL3/SDL_stdinc.h>
 #include <cassert>
 #include <chrono>
 #include <cstddef>
 #include <filesystem>
 #include <future>
-#include <glm/ext/vector_float3.hpp>
+// #include <glm/ext/vector_float3.hpp>
 #include <imgui/backends/imgui_impl_sdl3.h>
 #include <imgui/backends/imgui_impl_sdlgpu3.h>
 #include <imgui/imgui.h>
@@ -20,7 +17,6 @@
 #include <glm/ext/matrix_transform.hpp>
 #include <glm/gtc/constants.hpp>
 #include <utility>
-#include <vector>
 
 #include "src/camera.h"
 #include "src/logger.h"

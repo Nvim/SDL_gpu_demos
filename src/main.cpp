@@ -1,6 +1,4 @@
-#include <SDL3/SDL.h>
-#include <SDL3/SDL_keycode.h>
-#include <SDL3/SDL_log.h>
+#include "pch.h"
 #include <SDL3/SDL_video.h>
 
 #include "cube.h"

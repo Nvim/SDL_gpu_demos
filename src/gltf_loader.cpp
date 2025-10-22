@@ -1,23 +1,20 @@
+#include "pch.h"
 #include "gltf_loader.h"
 #include "fastgltf/math.hpp"
-#include "logger.h"
 #include "shaders/material_features.h"
 #include "src/cube.h"
 #include "src/rendersystem.h"
 #include "src/tangent_loader.h"
 #include "src/types.h"
 #include <SDL3/SDL_error.h>
-#include <SDL3/SDL_gpu.h>
 #include <cstddef>
-#include <glm/geometric.hpp>
+// #include <glm/geometric.hpp>
 #include <limits>
 #define GLM_ENABLE_EXPERIMENTAL 1
 #include <glm/ext/matrix_transform.hpp>
 #include <glm/ext/quaternion_common.hpp>
 #include <glm/ext/quaternion_float.hpp>
 #include <glm/gtx/quaternion.hpp>
-#include <memory>
-#include <vector>
 
 #ifndef STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_IMPLEMENTATION
@@ -28,10 +25,8 @@
 #include <SDL3/SDL_surface.h>
 #include <cassert>
 #include <fastgltf/tools.hpp>
-#include <filesystem>
-#include <glm/ext/vector_float3.hpp>
+// #include <glm/ext/vector_float3.hpp>
 #include <stb/stb_image.h>
-#include <string>
 #include <variant>
 
 namespace {

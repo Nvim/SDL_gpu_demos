@@ -1,3 +1,4 @@
+#include "pch.h"
 #include "gltf_scene.h"
 #include "gltf_loader.h"
 

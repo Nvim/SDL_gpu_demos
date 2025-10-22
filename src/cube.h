@@ -95,6 +95,7 @@ private:
   GLTFLoader loader_{ this };
   std::filesystem::path default_scene_path_{
     MODELS_DIR / "DamagedHelmet/DamagedHelmetWithTangents.glb"
+    // MODELS_DIR / "Suzanne/Suzanne.gltf"
   };
   UniquePtr<GLTFScene> scene_{};
   ScenePicker scene_picker_{ MODELS_DIR, default_scene_path_ };

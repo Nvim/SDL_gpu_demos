@@ -1,6 +1,5 @@
+#include "pch.h"
 #include "rendersystem.h"
-#include "src/logger.h"
-#include "src/types.h"
 
 void
 SceneNode::Update(glm::mat4 parentMatrix)
