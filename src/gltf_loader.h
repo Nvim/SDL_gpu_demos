@@ -6,6 +6,7 @@
 #include "src/logger.h"
 #include "src/program.h"
 #include "src/rendersystem.h"
+#include "src/tangent_loader.h"
 #include "types.h"
 #include <SDL3/SDL_gpu.h>
 #include <fastgltf/core.hpp>
@@ -65,6 +66,7 @@ private:
 private:
   Program* program_;
   fastgltf::Asset asset_;
+  UniquePtr<TangentLoader> tangent_loader_{ nullptr };
 
   SDL_GPUSampler* default_sampler_{ nullptr };
   SDL_GPUTexture* default_texture_{ nullptr };

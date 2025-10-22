@@ -5,7 +5,7 @@
 
 layout(location = 0) in vec3 inPos;
 layout(location = 1) in vec3 inNormal;
-layout(location = 2) in vec3 inTangent;
+layout(location = 2) in vec4 inTangent;
 layout(location = 3) in vec2 inUv;
 layout(location = 4) in vec4 inColor;
 
@@ -29,20 +29,21 @@ void main()
 {
     outUv = inUv;
     outColor = inColor;
-    outNormal = mat3(transpose(inverse(mat_m))) * inNormal;
     outNormal = (mat_m * vec4(inNormal, 0.f)).xyz;
 
     vec4 relative_pos = mat_m * vec4(inPos, 1.0);
+
+    vec3 T = normalize(vec3(mat_m * inTangent));
+    vec3 N = normalize(vec3(mat_m * vec4(inNormal, 0.0)));
+    T = normalize(T - dot(T, N) * N); // re-orthogonalize
+    vec3 B = cross(N, T) * inTangent.w;
+    outTBN = mat3(T, B, N);
+
     if (dimension == 1) {
         outFragPos = relative_pos.xyz;
         gl_Position = mat_viewproj * relative_pos;
         return;
     }
-
-    vec3 T = normalize(vec3(mat_m * vec4(inTangent, 0.0)));
-    vec3 N = normalize(vec3(mat_m * vec4(inNormal, 0.0)));
-    vec3 B = cross(N, T);
-    outTBN = mat3(T, B, N);
 
     uint instance = gl_InstanceIndex;
     uint square = dimension * dimension;

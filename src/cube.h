@@ -94,7 +94,7 @@ private:
   Skybox skybox_{ "resources/textures/skybox", Window, Device };
   GLTFLoader loader_{ this };
   std::filesystem::path default_scene_path_{
-    MODELS_DIR / "DamagedHelmet/DamagedHelmet.gltf"
+    MODELS_DIR / "DamagedHelmet/DamagedHelmetWithTangents.glb"
   };
   UniquePtr<GLTFScene> scene_{};
   ScenePicker scene_picker_{ MODELS_DIR, default_scene_path_ };
@@ -111,6 +111,7 @@ private:
   bool wireframe_{ false };
   bool skybox_toggle_{ true };
   i32 tex_idx{ 0 };
+  glm::vec3 light_pos_{ 10.f };
 
   // GPU Resources:
   SDL_GPUTexture* depth_target_{ nullptr };

@@ -6,6 +6,7 @@
 #include <SDL3/SDL_stdinc.h>
 #include <cassert>
 #include <chrono>
+#include <cstddef>
 #include <filesystem>
 #include <future>
 #include <glm/ext/vector_float3.hpp>
@@ -128,9 +129,12 @@ CubeProgram::Init()
   SDL_GPUColorTargetDescription color_descs[1]{};
   color_descs[0].format = SDL_GetGPUSwapchainTextureFormat(Device, Window);
 
-  static_assert(sizeof(glm::vec4) == 16);
-  static_assert(sizeof(glm::vec3) == 12);
-  static_assert(sizeof(glm::vec2) == 8);
+  static constexpr size_t FLOAT4 = sizeof(glm::vec4);
+  static constexpr size_t FLOAT3 = sizeof(glm::vec3);
+  static constexpr size_t FLOAT2 = sizeof(glm::vec2);
+  static_assert(FLOAT4 == 16);
+  static_assert(FLOAT3 == 12);
+  static_assert(FLOAT2 == 8);
   SDL_GPUVertexAttribute vertex_attributes[] = {
     { .location = 0,
       .buffer_slot = 0,
@@ -139,20 +143,23 @@ CubeProgram::Init()
     { .location = 1,
       .buffer_slot = 0,
       .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3,
-      .offset = sizeof(glm::vec3) },
+      .offset = FLOAT3 },
     { .location = 2,
       .buffer_slot = 0,
-      .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3,
-      .offset = 2 * sizeof(glm::vec3) },
+      .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4,
+      .offset = 2 * FLOAT3 },
     { .location = 3,
       .buffer_slot = 0,
       .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2,
-      .offset = 3 * sizeof(glm::vec3) },
+      .offset = 2 * FLOAT3 + FLOAT4 },
     { .location = 4,
       .buffer_slot = 0,
       .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4,
-      .offset = 3 * sizeof(glm::vec3) + sizeof(glm::vec2) },
+      .offset = 2 * FLOAT3 + FLOAT4 + FLOAT2 },
   };
+
+  static_assert((2 * FLOAT3 + FLOAT4 + FLOAT2 + FLOAT4) ==
+                sizeof(PosNormalTangentColorUvVertex));
 
   SDL_GPUVertexBufferDescription vertex_desc[] = { {
     .slot = 0,
@@ -223,7 +230,7 @@ CubeProgram::Init()
   LOG_DEBUG("Created render target textures");
 
   global_transform_.translation_ = { 0.f, 0.f, 0.0f };
-  global_transform_.scale_ = { 1.f, 1.f, 1.f };
+  global_transform_.scale_ = { 1.5f, 1.5f, 1.5f };
 
   camera_.Position = glm::vec3{ 0.f, .5f, 3.5f };
   camera_.Target = glm::vec3{ 0.f, 0.f, 0.f };
@@ -341,7 +348,7 @@ CubeProgram::Draw()
   SceneDataBinding scene_data{ vp,
                                camera_.Model(),
                                glm::vec4{ camera_.Position, 0.f },
-                               glm::vec4{ 30.f, 20.f, 0.f, 0.f },
+                               glm::vec4{ light_pos_, 0.f },
                                glm::vec4{ .9f, .9f, .9f, .1f },
                                instance_cfg.spread,
                                instance_cfg.dimension };
@@ -535,6 +542,11 @@ CubeProgram::DrawGui()
         }
         ImGui::TreePop();
       }
+      if (ImGui::TreeNode("Lighting")) {
+        if (ImGui::SliderFloat3("Position", (float*)&light_pos_, -20.f, 20.f)) {
+        }
+        ImGui::TreePop();
+      }
       if (ImGui::TreeNode("Spin")) {
         for (auto& rot : rotations_) {
           ImGui::InputFloat(rot.name, &rot.speed);
@@ -554,6 +566,7 @@ CubeProgram::DrawGui()
         ImGui::InputInt("Dimensions", (int*)&instance_cfg.dimension);
         ImGui::TreePop();
       }
+
       ImGui::InputInt("Texture index", &tex_idx);
       ImGui::Checkbox("Wireframe", &wireframe_);
       ImGui::Checkbox("Skybox", &skybox_toggle_);

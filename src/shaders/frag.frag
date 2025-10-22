@@ -53,31 +53,16 @@ struct {
     vec3 world_pos;
     vec3 color;
 } PointLight = {
-    vec3(10.f, 8.f, 10.f),
-    vec3(1.f, 1.f, 1.f),
-};
+        // vec3(10.f, 10.f, 10.f),
+        // vec3(1.f, 1.f, 1.f),
+        vec3(sun_dir),
+        vec3(sun_color),
+    };
 
 float DistributionGGX(vec3 normal, vec3 hvec, float roughness);
 float GeometrySchlickGGX(float NdotV, float roughness);
 float GeometrySmith(vec3 normal, vec3 view_dir, vec3 light_dir, float roughness);
 vec3 FresnelSchlick(float cosTheta, vec3 F0);
-
-vec3 getNormalFromMap()
-{
-    vec3 tangentNormal = texture(TexNormal, inUv).xyz * 2.0 - 1.0;
-
-    vec3 Q1  = dFdx(inFragPos);
-    vec3 Q2  = dFdy(inFragPos);
-    vec2 st1 = dFdx(inUv);
-    vec2 st2 = dFdy(inUv);
-
-    vec3 N   = normalize(inNormal);
-    vec3 T  = normalize(Q1*st2.t - Q2*st1.t);
-    vec3 B  = -normalize(cross(N, T));
-    mat3 TBN = mat3(T, B, N);
-
-    return normalize(TBN * tangentNormal);
-}
 
 void main()
 {
@@ -102,17 +87,14 @@ void main()
         metalness = metalrough.b * mat.metal_factor;
         roughness = metalrough.g * mat.rough_factor;
         roughness = clamp(roughness, 0.04, 1.0);
-        roughness = roughness*roughness;
+        roughness = roughness * roughness;
     }
 
     if (bool(mat.feature_flags & HAS_NORMAL_TEX)) {
         // TODO: Scaling
-        // normal = texture(TexNormal, inUv).rgb;
-        // normal = normal * 2.0 - 1.0; // [0, 1] -> [-1, 1]
-        // normal = normalize(inTBN * normal);
-        normal = getNormalFromMap();
-        // OutFragColor = vec4(normal, 1.0);
-        // return;
+        normal = texture(TexNormal, inUv).rgb;
+        normal = normal * 2.0 - 1.0; // [0, 1] -> [-1, 1]
+        normal = normalize(inTBN * normal);
     }
     if (bool(mat.feature_flags & HAS_EMISSIVE_TEX)) {
         // TODO: factor
@@ -133,7 +115,7 @@ void main()
 
         float distance = length(PointLight.world_pos - camera_world.xyz);
         float attenuation = 1.0 / (distance);
-        // vec3 radiance = PointLight.color * attenuation ; // skip attenuation because directional light
+        // vec3 radiance = PointLight.color * attenuation;
         vec3 radiance = PointLight.color;
 
         float D = DistributionGGX(normal, hvec, roughness);
@@ -158,7 +140,7 @@ void main()
     float ao_strength = 1.0; // TODO: use strength param from model
     ao = 1.0 + ao_strength * (ao - 1.0);
     vec3 ambient = vec3(0.03) * diffuse_color.rgb * ao;
-    vec3 result = Lo + ambient + emissive; 
+    vec3 result = Lo + ambient + emissive;
 
     // tone mapping + gamma correction
     result = result / (result + vec3(1.0));
@@ -203,3 +185,39 @@ float GeometrySmith(vec3 normal, vec3 view_dir, vec3 light_dir, float roughness)
 vec3 FresnelSchlick(float cosTheta, vec3 F0) {
     return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
 }
+
+// From https://ogldev.org/www/tutorial26/tutorial26.html
+// To be used with his manual tangent computing method. No .w component
+// vec3 ogldevNormal()
+// {
+//     vec3 Normal = normalize(inNormal);
+//     vec3 Tangent = normalize(inTan);
+//     Tangent = normalize(Tangent - dot(Tangent, Normal) * Normal);
+//     vec3 Bitangent = cross(Tangent, Normal);
+//     vec3 BumpMapNormal = texture(TexNormal, inUv).xyz;
+//     BumpMapNormal = 2.0 * BumpMapNormal - vec3(1.0, 1.0, 1.0);
+//     vec3 NewNormal;
+//     mat3 TBN = mat3(Tangent, Bitangent, Normal);
+//     NewNormal = TBN * BumpMapNormal;
+//     NewNormal = normalize(NewNormal);
+//     return NewNormal;
+// }
+//
+// From LearnOpenGL Github. Not explained in tutorials.
+// Works flawlessly but derivates in every fragment shader run.
+// vec3 getNormalFromMap()
+// {
+//     vec3 tangentNormal = texture(TexNormal, inUv).xyz * 2.0 - 1.0;
+//
+//     vec3 Q1  = dFdx(inFragPos);
+//     vec3 Q2  = dFdy(inFragPos);
+//     vec2 st1 = dFdx(inUv);
+//     vec2 st2 = dFdy(inUv);
+//
+//     vec3 N   = normalize(inNormal);
+//     vec3 T  = normalize(Q1*st2.t - Q2*st1.t);
+//     vec3 B  = -normalize(cross(N, T));
+//     mat3 TBN = mat3(T, B, N);
+//
+//     return normalize(TBN * tangentNormal);
+// }

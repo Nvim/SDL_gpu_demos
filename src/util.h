@@ -42,7 +42,7 @@ struct PosNormalTangentColorUvVertex
 {
   glm::vec3 pos;
   glm::vec3 normal{ 0.f };
-  glm::vec3 tangent{ 0.f };
+  glm::vec4 tangent{ 0.f };
   glm::vec2 uv{ 0.f };
   glm::vec4 color{ 1.f };
 };

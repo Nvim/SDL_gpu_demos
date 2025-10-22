@@ -4,9 +4,11 @@
 #include "shaders/material_features.h"
 #include "src/cube.h"
 #include "src/rendersystem.h"
+#include "src/tangent_loader.h"
 #include "src/types.h"
 #include <SDL3/SDL_error.h>
 #include <SDL3/SDL_gpu.h>
+#include <cstddef>
 #include <glm/geometric.hpp>
 #include <limits>
 #define GLM_ENABLE_EXPERIMENTAL 1
@@ -72,6 +74,7 @@ extract_mipmap_mode(fastgltf::Filter filter)
 GLTFLoader::GLTFLoader(Program* program)
   : program_{ program }
 {
+  tangent_loader_ = std::make_unique<OGLDevTangentLoader>();
 }
 
 GLTFLoader::~GLTFLoader()
@@ -219,49 +222,6 @@ GLTFLoader::LoadResources(GLTFScene* ret)
   return true;
 }
 
-// Modify the `vertices` vector in-place to add tangent vectors.
-// NOTE: vertices need to have Position and UVs attributes set
-void
-set_tangents(std::vector<PosNormalTangentColorUvVertex>& vertices,
-             std::vector<u32>& indices)
-{
-  assert(indices.size() != 0);
-  assert(indices.size() % 3 == 0);
-  for (unsigned int i = 0; i < indices.size(); i += 3) {
-    auto& v0 = vertices[indices[i]];
-    auto& v1 = vertices[indices[i + 1]];
-    auto& v2 = vertices[indices[i + 2]];
-
-    glm::vec3 edge1 = v1.pos - v0.pos;
-    glm::vec3 edge2 = v2.pos - v0.pos;
-
-    float deltaU1 = v1.uv.x - v0.uv.x;
-    float deltaV1 = v1.uv.y - v0.uv.y;
-    float deltaU2 = v2.uv.x - v0.uv.x;
-    float deltaV2 = v2.uv.y - v0.uv.y;
-
-    float f = 1.0f / (deltaU1 * deltaV2 - deltaU2 * deltaV1);
-
-    glm::vec3 tangent;
-    // , bitangent;
-
-    tangent.x = f * (deltaV2 * edge1.x - deltaV1 * edge2.x);
-    tangent.y = f * (deltaV2 * edge1.y - deltaV1 * edge2.y);
-    tangent.z = f * (deltaV2 * edge1.z - deltaV1 * edge2.z);
-    // bitangent.x = f * (-deltaU2 * edge1.x + deltaU1 * edge2.x);
-    // bitangent.y = f * (-deltaU2 * edge1.y + deltaU1 * edge2.y);
-    // bitangent.z = f * (-deltaU2 * edge1.z + deltaU1 * edge2.z);
-
-    v0.tangent += tangent;
-    v1.tangent += tangent;
-    v2.tangent += tangent;
-  }
-
-  for (unsigned int i = 0; i < vertices.size(); i++) {
-    vertices[i].tangent = glm::normalize(vertices[i].tangent);
-  }
-}
-
 bool
 GLTFLoader::LoadVertexData(GLTFScene* ret)
 {
@@ -364,6 +324,20 @@ GLTFLoader::LoadVertexData(GLTFScene* ret)
           static_cast<CubeProgram*>(program_)->ScenePipeline;
       }
 
+      { // tangents:
+        auto attr = p.findAttribute("TANGENT");
+        if (attr != p.attributes.end()) {
+          fastgltf::iterateAccessorWithIndex<glm::vec4>(
+            asset_,
+            asset_.accessors[attr->accessorIndex],
+            [&](glm::vec4 v, size_t index) {
+              vertices[initial_vtx + index].tangent = v;
+            });
+          LOG_INFO("Found tangents attribute for mesh {}", mesh.name.c_str());
+          need_tangents = false;
+        }
+      }
+
       newMesh.Submeshes.push_back(newGeometry);
       LOG_DEBUG("New geometry. Total Verts: {}, Total Indices: {}",
                 vertices.size(),
@@ -373,8 +347,13 @@ GLTFLoader::LoadVertexData(GLTFScene* ret)
     // Lazy pre-compute tangents only if necessary:
     // Iterate all vertices after they're all loaded
     if (need_tangents) {
-      LOG_WARN("Computing tangents for mesh {}", mesh.name.c_str());
-      set_tangents(vertices, indices);
+      LOG_INFO("Computing tangents for mesh {}", mesh.name.c_str());
+      CPUMeshBuffers buffers{};
+      {
+        buffers.IndexBuffer = &indices;
+        buffers.VertexBuffer = &vertices;
+      }
+      tangent_loader_->Load(&buffers);
     }
     if (!UploadBuffers(&newMesh.Buffers, vertices, indices)) {
       LOG_ERROR("Couldn't upload mesh data");

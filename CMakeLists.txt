@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.30)
 
-project(sdlcube LANGUAGES CXX)
+project(sdlcube LANGUAGES CXX C)
 
 # CPP Setup
 set(CMAKE_CXX_STANDARD 20)
@@ -30,20 +30,19 @@ target_sources(imgui PRIVATE
 )
 
 # Fastgltf
-set(FASTGLTF_COMPILE_AS_CPP20 YES CACHE "" BOOL)
-set(FASTGLTF_ENABLE_TESTS NO CACHE "" BOOL)
-set(FASTGLTF_ENABLE_EXAMPLES NO CACHE "" BOOL)
-set(FASTGLTF_ENABLE_DOCS NO CACHE "" BOOL)
+set(FASTGLTF_COMPILE_AS_CPP20 YES CACHE BOOL "Compile fastgltf as C++20" )
+set(FASTGLTF_ENABLE_TESTS NO CACHE BOOL "Disable fastgltf tests" )
+set(FASTGLTF_ENABLE_EXAMPLES NO CACHE BOOL "Disable fastgltf examples" )
+set(FASTGLTF_ENABLE_DOCS NO CACHE BOOL "disable fastgltf docs" )
 add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/fastgltf")
 
 target_link_libraries(imgui PUBLIC SDL3::SDL3)
 
 # Spdlog
-set(CMAKE_BUILD_TYPE ${CMAKE_BUILD_TYPE})
-set(SPDLOG_BUILD_EXAMPLE OFF CACHE "" BOOL)
-set(SPDLOG_BUILD_BENCH OFF CACHE "" BOOL)
-set(SPDLOG_BUILD_TESTS OFF CACHE "" BOOL)
-set(SPDLOG_BUILD_SHARED OFF CACHE "" BOOL)
+set(SPDLOG_BUILD_EXAMPLE OFF CACHE BOOL "Disable SPDLOG example builds")
+set(SPDLOG_BUILD_BENCH OFF CACHE BOOL "Disable SPDLOG benchmark builds")
+set(SPDLOG_BUILD_TESTS OFF CACHE BOOL "Disable SPDLOG test builds")
+set(SPDLOG_BUILD_SHARED OFF CACHE BOOL "Disable SPDLOG shared library builds")
 add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/spdlog")
 
 # SDL
@@ -66,4 +65,5 @@ target_link_libraries(${PROJECT_NAME} PUBLIC
   spdlog::spdlog
   stb::stb 
   cxx_setup
+  mikktspace
 )
