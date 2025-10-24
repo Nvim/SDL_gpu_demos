@@ -1,8 +1,6 @@
-#include "pch.h"
-#include "camera.h"
+#include <pch.h>
 
-#include <glm/ext/matrix_clip_space.hpp>
-#include <glm/ext/matrix_transform.hpp>
+#include "camera.h"
 
 Camera::Camera(float fov, float aspect, float near, float far, glm::vec3 up)
   : fov_{ fov }

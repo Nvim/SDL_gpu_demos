@@ -1,9 +1,11 @@
 #pragma once
 
-#include "src/gltf_material.h"
-#include "src/rendersystem.h"
-#include <SDL3/SDL_gpu.h>
 #include <filesystem>
+
+#include "common/gltf_material.h"
+#include "common/rendersystem.h"
+
+#include <SDL3/SDL_gpu.h>
 
 class GLTFLoader;
 

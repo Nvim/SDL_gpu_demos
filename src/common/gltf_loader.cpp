@@ -1,33 +1,29 @@
-#include "pch.h"
-#include "gltf_loader.h"
-#include "fastgltf/math.hpp"
+#include <pch.h>
+
+#include "common/gltf_loader.h"
+
+#include "apps/pbr/pbr_app.h" // TODO: remove!
+#include "common/rendersystem.h"
+#include "common/tangent_loader.h"
+#include "common/types.h"
+#include "common/util.h"
 #include "shaders/material_features.h"
-#include "src/cube.h"
-#include "src/rendersystem.h"
-#include "src/tangent_loader.h"
-#include "src/types.h"
-#include <SDL3/SDL_error.h>
-#include <cstddef>
-// #include <glm/geometric.hpp>
+
 #include <limits>
+#include <variant>
+
+#include <fastgltf/glm_element_traits.hpp>
+#include <fastgltf/math.hpp>
+#include <fastgltf/tools.hpp>
+#include <fastgltf/types.hpp>
 #define GLM_ENABLE_EXPERIMENTAL 1
-#include <glm/ext/matrix_transform.hpp>
 #include <glm/ext/quaternion_common.hpp>
 #include <glm/ext/quaternion_float.hpp>
 #include <glm/gtx/quaternion.hpp>
-
 #ifndef STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_IMPLEMENTATION
 #endif
-#include "fastgltf/glm_element_traits.hpp"
-#include "fastgltf/types.hpp"
-#include "src/util.h"
-#include <SDL3/SDL_surface.h>
-#include <cassert>
-#include <fastgltf/tools.hpp>
-// #include <glm/ext/vector_float3.hpp>
 #include <stb/stb_image.h>
-#include <variant>
 
 namespace {
 SDL_GPUFilter
@@ -315,6 +311,7 @@ GLTFLoader::LoadVertexData(GLTFScene* ret)
         } else {
           newGeometry.material = ret->materials_[0]->Build();
         }
+        // TODO!
         newGeometry.material->Pipeline =
           static_cast<CubeProgram*>(program_)->ScenePipeline;
       }
@@ -797,7 +794,7 @@ GLTFLoader::LoadMaterials(GLTFScene* ret)
                            SDL_GPUTexture** texture,
                            SDL_GPUSampler** sampler,
                            int flag,
-                           bool srgb = false) {
+                           [[maybe_unused]] bool srgb = false) {
       // using TexInfoType = std::decay_t<decltype(*opt_tex_info)>;
       if (opt_tex_info.has_value()) {
         auto tex_idx = opt_tex_info.value().textureIndex;

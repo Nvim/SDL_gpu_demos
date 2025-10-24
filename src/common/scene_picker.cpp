@@ -1,7 +1,8 @@
-#include "pch.h"
+#include <pch.h>
+
 #include "scene_picker.h"
-#include "imgui.h"
-#include <cassert>
+
+#include <imgui.h>
 
 ScenePicker::ScenePicker(std::filesystem::path base_path,
                          std::filesystem::path current_asset)

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "material.h"
+#include "common/material.h"
 #include "shaders/material_features.h"
 
 #define CAST_FLAG(f) static_cast<u8>(f)

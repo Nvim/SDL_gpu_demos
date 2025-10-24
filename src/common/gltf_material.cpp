@@ -1,7 +1,9 @@
-#include "pch.h"
+#include <pch.h>
+
 #include "gltf_material.h"
-#include "material.h"
-#include "ubo.h"
+
+#include "common/material.h"
+#include "common/ubo.h"
 
 #define CREATE_BINDING(flag, tex, sampler)                                     \
   mat->SamplerBindings[CastFlag<u8>(PbrTextureFlag::flag)] =                   \

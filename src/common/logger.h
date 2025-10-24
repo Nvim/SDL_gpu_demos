@@ -1,7 +1,8 @@
 #pragma once
 
-#include "spdlog/logger.h"
 #include <memory>
+
+#include <spdlog/logger.h>
 
 struct Logger
 {

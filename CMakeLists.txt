@@ -6,7 +6,7 @@ project(sdlcube LANGUAGES CXX C)
 set(CMAKE_CXX_STANDARD 20)
 add_library(cxx_setup INTERFACE)
 target_compile_features(cxx_setup INTERFACE cxx_std_20)
-target_include_directories(cxx_setup INTERFACE ${PROJECT_SOURCE_DIR})
+target_include_directories(cxx_setup INTERFACE "${PROJECT_SOURCE_DIR}/src")
 target_compile_options(cxx_setup INTERFACE -Wall -Wpedantic -Wextra)
 
 # Expected installed libs

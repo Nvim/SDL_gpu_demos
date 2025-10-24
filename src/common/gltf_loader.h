@@ -1,17 +1,19 @@
 #pragma once
 
-#include "fastgltf/types.hpp"
-#include "src/gltf_material.h"
-#include "src/gltf_scene.h"
-#include "src/logger.h"
-#include "src/program.h"
-#include "src/rendersystem.h"
-#include "src/tangent_loader.h"
-#include "types.h"
+#include <vector>
+
+#include "common/gltf_material.h"
+#include "common/gltf_scene.h"
+#include "common/logger.h"
+#include "common/program.h"
+#include "common/rendersystem.h"
+#include "common/tangent_loader.h"
+#include "common/types.h"
+
 #include <SDL3/SDL_gpu.h>
 #include <fastgltf/core.hpp>
+#include <fastgltf/types.hpp>
 #include <glm/ext/matrix_float4x4.hpp>
-#include <vector>
 
 struct LoadedImage
 {

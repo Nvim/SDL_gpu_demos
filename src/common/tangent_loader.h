@@ -1,8 +1,10 @@
 #pragma once
 
-#include "src/util.h"
-#include <mikktspace/mikktspace.h>
 #include <vector>
+
+#include "common/util.h"
+
+#include <mikktspace/mikktspace.h>
 
 struct CPUMeshBuffers
 {
@@ -14,6 +16,7 @@ class TangentLoader
 {
 public:
   virtual void Load(CPUMeshBuffers* buffers) = 0;
+  virtual ~TangentLoader() = default;
 };
 /* *
  * This class uses the method described in OGLDev's [tutorial
@@ -22,10 +25,11 @@ public:
  * look better. The result isn't perfect however, and using gltf-transform
  * will provide more satisfying results.
  * */
-class OGLDevTangentLoader : public TangentLoader
+class OGLDevTangentLoader final : public TangentLoader
 {
 public:
   OGLDevTangentLoader() = default;
+  ~OGLDevTangentLoader() = default;
   void Load(CPUMeshBuffers* buffers) override;
 };
 
@@ -40,10 +44,11 @@ public:
  * [gltf-transform](https://github.com/donmccurdy/glTF-Transform) does.
  * */
 
-class MikktspaceTangentLoader : public TangentLoader
+class MikktspaceTangentLoader final : public TangentLoader
 {
 public:
   MikktspaceTangentLoader();
+  ~MikktspaceTangentLoader() = default;
   void Load(CPUMeshBuffers* buffers) override;
 
 public:

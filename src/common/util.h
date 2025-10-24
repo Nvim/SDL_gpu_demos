@@ -1,10 +1,8 @@
 #pragma once
 
-#include "src/types.h"
+#include "common/types.h"
+
 #include <SDL3/SDL_gpu.h>
-#include <glm/ext/vector_float4.hpp>
-#include <glm/vec2.hpp>
-#include <glm/vec3.hpp>
 #include <type_traits>
 
 struct PosVertex

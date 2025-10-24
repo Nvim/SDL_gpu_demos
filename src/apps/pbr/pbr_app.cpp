@@ -1,27 +1,16 @@
-#include "pch.h"
-#include "cube.h"
+#include <pch.h>
 
-#include <cassert>
-#include <chrono>
-#include <cstddef>
-#include <filesystem>
-#include <future>
-// #include <glm/ext/vector_float3.hpp>
+#include "pbr_app.h"
+
+#include "common/camera.h"
+#include "common/logger.h"
+#include "common/types.h"
+#include "common/util.h"
+
+#include <glm/gtc/constants.hpp>
 #include <imgui/backends/imgui_impl_sdl3.h>
 #include <imgui/backends/imgui_impl_sdlgpu3.h>
 #include <imgui/imgui.h>
-
-#include <glm/common.hpp>
-#include <glm/ext/matrix_clip_space.hpp>
-#include <glm/ext/matrix_float4x4.hpp>
-#include <glm/ext/matrix_transform.hpp>
-#include <glm/gtc/constants.hpp>
-#include <utility>
-
-#include "src/camera.h"
-#include "src/logger.h"
-#include "src/types.h"
-#include "util.h"
 
 CubeProgram::CubeProgram(SDL_GPUDevice* device,
                          SDL_Window* window,

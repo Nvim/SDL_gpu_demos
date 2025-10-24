@@ -1,8 +1,8 @@
-#include "pch.h"
+#include <pch.h>
+
 #include "tangent_loader.h"
-#include "mikktspace/mikktspace.h"
-#include <assert.h>
-// #include <glm/geometric.hpp>
+
+#include <mikktspace/mikktspace.h>
 
 MikktspaceTangentLoader::MikktspaceTangentLoader()
 {

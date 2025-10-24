@@ -1,4 +1,4 @@
-#include "pch.h"
+#include <pch.h>
 
 #include <SDL3_image/SDL_image.h>
 

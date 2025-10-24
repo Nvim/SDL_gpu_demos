@@ -2,7 +2,6 @@
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_gpu.h>
-// #include <memory>
 
 // Program uses SDL GPU and Window to draw, but isn't responsible for
 // creating/releasing them.

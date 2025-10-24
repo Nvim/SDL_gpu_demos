@@ -1,6 +1,7 @@
 #pragma once
 
-#include "src/util.h"
+#include "common/util.h"
+
 #include <SDL3/SDL_gpu.h>
 
 class Skybox

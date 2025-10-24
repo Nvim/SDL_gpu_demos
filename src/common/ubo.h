@@ -1,11 +1,12 @@
 #pragma once
 
-#include "src/logger.h"
-#include "src/types.h"
-#include <SDL3/SDL_gpu.h>
 #include <cassert>
+
+#include "common/logger.h"
+#include "common/types.h"
+
+#include <SDL3/SDL_gpu.h>
 #include <glm/ext/vector_float4.hpp>
-// #include <type_traits>
 
 enum class UBOBindingType
 {

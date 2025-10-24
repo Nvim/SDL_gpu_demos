@@ -1,8 +1,6 @@
-#include "pch.h"
-#include "transform.h"
+#include <pch.h>
 
-#include <glm/ext/matrix_transform.hpp>
-#include <glm/gtc/matrix_transform.hpp>
+#include "transform.h"
 
 const glm::mat4&
 Transform::Matrix()

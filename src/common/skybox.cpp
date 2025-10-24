@@ -1,8 +1,9 @@
-#include "pch.h"
+#include <pch.h>
+
 #include "skybox.h"
+
 #include <SDL3/SDL_stdinc.h>
 #include <SDL3/SDL_surface.h>
-#include <cassert>
 
 Skybox::Skybox(const char* dir, SDL_Window* window, SDL_GPUDevice* device)
   : dir_{ dir }

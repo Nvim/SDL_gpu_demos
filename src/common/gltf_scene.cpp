@@ -1,6 +1,8 @@
-#include "pch.h"
+#include <pch.h>
+
 #include "gltf_scene.h"
-#include "gltf_loader.h"
+
+#include "common/gltf_loader.h"
 
 GLTFScene::GLTFScene(std::filesystem::path path, const GLTFLoader* loader)
   : Path{ path }

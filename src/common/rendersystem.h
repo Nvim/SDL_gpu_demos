@@ -1,11 +1,12 @@
 #pragma once
 
-#include "src/camera.h"
-#include "src/material.h"
-#include "src/util.h"
+#include <vector>
+
+#include "common/camera.h"
+#include "common/material.h"
+
 #include <SDL3/SDL_gpu.h>
 #include <glm/ext/matrix_float4x4.hpp>
-#include <vector>
 
 struct RenderItem
 {

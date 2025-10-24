@@ -1,11 +1,12 @@
 #pragma once
 
-#include "src/util.h"
-#include "types.h"
-#include "ubo.h"
-#include <SDL3/SDL_gpu.h>
 #include <array>
-#include <glm/ext/matrix_float4x4.hpp>
+
+#include "common/types.h"
+#include "common/ubo.h"
+#include "common/util.h"
+
+#include <SDL3/SDL_gpu.h>
 #include <glm/vec4.hpp>
 
 enum class PbrTextureFlag : u8

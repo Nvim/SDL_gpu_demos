@@ -1,8 +1,9 @@
 #include "pch.h"
 #include <SDL3/SDL_video.h>
 
-#include "cube.h"
-#include "src/logger.h"
+// #include <apps/ssbo_demo/ssbo_demo.h>
+#include <apps/pbr/pbr_app.h>
+#include <common/logger.h>
 
 int
 main()

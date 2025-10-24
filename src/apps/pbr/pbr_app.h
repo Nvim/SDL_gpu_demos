@@ -5,14 +5,14 @@
 #include <future>
 #include <imgui/imgui.h>
 
-#include "camera.h"
-#include "program.h"
-#include "skybox.h"
-#include "src/gltf_loader.h"
-#include "src/gltf_scene.h"
-#include "src/scene_picker.h"
-#include "transform.h"
-#include "util.h"
+#include <common/camera.h>
+#include <common/gltf_loader.h>
+#include <common/gltf_scene.h>
+#include <common/program.h>
+#include <common/scene_picker.h>
+#include <common/skybox.h>
+#include <common/transform.h>
+#include <common/util.h>
 
 struct Rotation
 {
