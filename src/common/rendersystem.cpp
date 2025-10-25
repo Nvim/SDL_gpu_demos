@@ -1,4 +1,5 @@
 #include <pch.h>
+#include <vector>
 
 #include "rendersystem.h"
 
@@ -12,18 +13,21 @@ SceneNode::Update(glm::mat4 parentMatrix)
 }
 
 void
-SceneNode::Draw(glm::mat4 matrix, std::vector<RenderItem>& draws)
+SceneNode::Draw(glm::mat4 matrix, RenderContext& context)
 {
   for (const auto& child : Children) {
-    child->Draw(matrix, draws);
+    child->Draw(matrix, context);
   }
 }
 
 void
-MeshNode::Draw(glm::mat4 matrix, std::vector<RenderItem>& draws)
+MeshNode::Draw(glm::mat4 matrix, RenderContext& context)
 {
   glm::mat4 mat = matrix * WorldMatrix;
   for (const auto& submesh : Mesh->Submeshes) {
+    bool isOpaque = (submesh.material->Opacity == MaterialOpacity::Opaque);
+    std::vector<RenderItem>& draws =
+      isOpaque ? context.OpaqueItems : context.TransparentItems;
     draws.emplace_back(RenderItem{ mat,
                                    Mesh->VertexBuffer(),
                                    Mesh->IndexBuffer(),
@@ -31,7 +35,7 @@ MeshNode::Draw(glm::mat4 matrix, std::vector<RenderItem>& draws)
                                    submesh.VertexCount,
                                    submesh.material });
   }
-  SceneNode::Draw(matrix, draws); // recurse down on children
+  SceneNode::Draw(matrix, context); // recurse down on children
 }
 
 // TODO

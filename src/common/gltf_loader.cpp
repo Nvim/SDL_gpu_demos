@@ -2,6 +2,7 @@
 
 #include "common/gltf_loader.h"
 
+#include "common/material.h"
 #include "common/rendersystem.h"
 #include "common/tangent_loader.h"
 #include "common/types.h"
@@ -341,10 +342,14 @@ GLTFLoader::LoadVertexData(GLTFScene* ret)
             need_tangents = (mat->FeatureFlags & HAS_NORMAL_TEX);
           }
         } else {
+          // TODO: pre-build default material once
           newGeometry.material = ret->materials_[0]->Build();
         }
-        // TODO: blending
-        newGeometry.material->Pipeline = opaque_pipeline_;
+        if (newGeometry.material->Opacity == MaterialOpacity::Opaque) {
+          newGeometry.material->Pipeline = opaque_pipeline_;
+        } else {
+          newGeometry.material->Pipeline = transparent_pipeline_;
+        }
       }
 
       { // tangents:
@@ -817,6 +822,11 @@ GLTFLoader::LoadMaterials(GLTFScene* ret)
         newMat->OcclusionFactor = mat.occlusionTexture.value().strength;
         newMat->FeatureFlags |= HAS_OCCLUSION_FACT;
       }
+
+      // TODO: support AlphaMode::Mask too
+      if (mat.alphaMode == fastgltf::AlphaMode::Blend) {
+        newMat->opacity = MaterialOpacity::Transparent;
+      }
     }
 
     // template optional because fastgltf::NormalTextureInfo type is derived
@@ -987,7 +997,11 @@ GLTFLoader::CreatePipelines()
 
   // TODO: query client's available modes and select an HDR mode:
   SDL_GPUColorTargetDescription color_descs[1]{};
-  color_descs[0].format = SDL_GetGPUSwapchainTextureFormat(Device, Window);
+  {
+    auto& d = color_descs[0];
+    d.format = SDL_GetGPUSwapchainTextureFormat(Device, Window);
+    d.blend_state.enable_blend = false;
+  }
 
   SDL_GPUVertexBufferDescription vertex_desc[] = { {
     .slot = 0,
@@ -1035,7 +1049,21 @@ GLTFLoader::CreatePipelines()
     LOG_ERROR("Couldn't create pipeline!");
     return false;
   }
-  // TODO: toggle alpha blending
+
+  { // Enable blending
+    auto& d = color_descs[0];
+    d.format = SDL_GetGPUSwapchainTextureFormat(Device, Window);
+    d.blend_state.enable_blend = true;
+    d.blend_state.color_blend_op = SDL_GPU_BLENDOP_ADD;
+    d.blend_state.dst_color_blendfactor =
+      SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+    d.blend_state.src_color_blendfactor = SDL_GPU_BLENDFACTOR_SRC_ALPHA;
+    d.blend_state.alpha_blend_op = SDL_GPU_BLENDOP_ADD;
+    d.blend_state.src_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE;
+    d.blend_state.dst_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ZERO;
+    // Transparent objects don't write to depth buffer
+    pipelineCreateInfo.depth_stencil_state.enable_depth_write = false;
+  }
   transparent_pipeline_ =
     SDL_CreateGPUGraphicsPipeline(Device, &pipelineCreateInfo);
   if (opaque_pipeline_ == nullptr) {

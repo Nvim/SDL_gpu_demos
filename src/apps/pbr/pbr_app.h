@@ -5,14 +5,15 @@
 #include <future>
 #include <imgui/imgui.h>
 
-#include <common/camera.h>
-#include <common/gltf_loader.h>
-#include <common/gltf_scene.h>
-#include <common/program.h>
-#include <common/scene_picker.h>
-#include <common/skybox.h>
-#include <common/transform.h>
-#include <common/util.h>
+#include "common/camera.h"
+#include "common/gltf_loader.h"
+#include "common/gltf_scene.h"
+#include "common/program.h"
+#include "common/rendersystem.h"
+#include "common/scene_picker.h"
+#include "common/skybox.h"
+#include "common/transform.h"
+#include "common/util.h"
 
 struct Rotation
 {
@@ -62,6 +63,19 @@ const std::filesystem::path MODELS_DIR("resources/models");
 
 class CubeProgram : public Program
 {
+  struct Stats
+  {
+    u32 total_draws;
+    u32 opaque_draws;
+    u32 transparent_draws;
+    void Reset()
+    {
+      total_draws = 0;
+      opaque_draws = 0;
+      transparent_draws = 0;
+    };
+  };
+
 public:
   CubeProgram(SDL_GPUDevice* device,
               SDL_Window* window,
@@ -92,9 +106,10 @@ private:
   Skybox skybox_{ "resources/textures/skybox", Window, Device };
   GLTFLoader loader_{ this };
   std::filesystem::path default_scene_path_{
-    MODELS_DIR / "DamagedHelmet/DamagedHelmetWithTangents.glb"
-    // MODELS_DIR / "Suzanne/Suzanne.gltf"
+    // MODELS_DIR / "DamagedHelmet/DamagedHelmetWithTangents.glb"
+    MODELS_DIR / "AlphaBlendModeTest.glb"
   };
+  RenderContext render_context_{};
   UniquePtr<GLTFScene> scene_{};
   ScenePicker scene_picker_{ MODELS_DIR, default_scene_path_ };
   bool is_loading_scene{ false };
@@ -103,6 +118,7 @@ private:
   const char* fragment_path_;
   const int vp_width_{ 640 };
   const int vp_height_{ 480 };
+  Stats stats_;
 
   // User controls:
   Rotation rotations_[3]; // spin cube

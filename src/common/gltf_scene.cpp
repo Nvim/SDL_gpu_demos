@@ -43,10 +43,10 @@ GLTFScene::Release()
 }
 
 void
-GLTFScene::Draw(glm::mat4 matrix, std::vector<RenderItem>& draws)
+GLTFScene::Draw(glm::mat4 matrix, RenderContext& context)
 {
   for (const auto& parent : parent_nodes_) {
-    parent->Draw(matrix, draws);
+    parent->Draw(matrix, context);
   }
 }
 

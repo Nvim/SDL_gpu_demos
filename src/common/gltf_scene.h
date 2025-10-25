@@ -19,7 +19,7 @@ public:
   GLTFScene(std::filesystem::path path, const GLTFLoader* loader);
   ~GLTFScene();
 
-  void Draw(glm::mat4 matrix, std::vector<RenderItem>& draws) override;
+  void Draw(glm::mat4 matrix, RenderContext& context) override;
   void Release();
 
   const std::vector<MeshAsset>& Meshes() const;

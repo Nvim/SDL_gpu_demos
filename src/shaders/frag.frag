@@ -146,7 +146,7 @@ void main()
     result = result / (result + vec3(1.0));
     result = pow(result, vec3(1.0 / 2.2));
 
-    OutFragColor = vec4(result, 1.0f);
+    OutFragColor = vec4(result, diffuse_color.a);
 }
 
 float DistributionGGX(vec3 normal, vec3 hvec, float roughness)

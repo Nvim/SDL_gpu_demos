@@ -115,7 +115,7 @@ CubeProgram::Init()
   global_transform_.translation_ = { 0.f, 0.f, 0.0f };
   global_transform_.scale_ = { 1.5f, 1.5f, 1.5f };
 
-  camera_.Position = glm::vec3{ 0.f, .5f, 3.5f };
+  camera_.Position = glm::vec3{ 0.f, 0.f, 6.5f };
   camera_.Target = glm::vec3{ 0.f, 0.f, 0.f };
 
   LOG_INFO("Initialized application");
@@ -219,15 +219,6 @@ CubeProgram::Draw()
   auto draw_data = DrawGui();
   auto d = instance_cfg.dimension;
   auto total_instances = d * d * d;
-  // {
-  //   glm::mat4 viewproj;
-  //   glm::mat4 cam_model;
-  //   glm::vec4 camera_world;
-  //   glm::vec4 sun_dir;
-  //   glm::vec4 sun_color;
-  //   f32 spread;
-  //   u32 dimension;
-  // };
   SceneDataBinding scene_data{ vp,
                                camera_.Model(),
                                glm::vec4{ camera_.Position, 0.f },
@@ -238,6 +229,7 @@ CubeProgram::Draw()
 
   ImGui_ImplSDLGPU3_PrepareDrawData(draw_data, cmdbuf);
 
+  stats_.Reset(); // Reset stats after GUI has drawn
   // Scene Pass
   {
     scene_color_target_info_.texture = color_target_;
@@ -250,9 +242,7 @@ CubeProgram::Draw()
 
     SDL_SetGPUViewport(scenePass, &scene_vp);
 
-    std::vector<RenderItem> draws;
-    scene_->Draw(glm::mat4{ 1.0f }, draws);
-    for (const auto& draw : draws) {
+    auto DrawCall = [&](const RenderItem& draw) {
       assert(draw.VertexBuffer != nullptr);
       assert(draw.IndexBuffer != nullptr);
       const SDL_GPUBufferBinding vBinding{ draw.VertexBuffer, 0 };
@@ -274,11 +264,24 @@ CubeProgram::Draw()
       material->BindSamplers(scenePass);
       SDL_DrawGPUIndexedPrimitives(
         scenePass, draw.VertexCount, total_instances, draw.FirstIndex, 0, 0);
+    };
+
+    scene_->Draw(glm::mat4{ 1.0f }, render_context_);
+    for (const auto& draw : render_context_.OpaqueItems) {
+      DrawCall(draw);
+      stats_.opaque_draws++;
+      stats_.total_draws++;
+    }
+    for (const auto& draw : render_context_.TransparentItems) {
+      DrawCall(draw);
+      stats_.transparent_draws++;
+      stats_.total_draws++;
     }
     if (skybox_toggle_) {
       skybox_.Draw(scenePass);
     }
 
+    render_context_.Clear();
     SDL_EndGPURenderPass(scenePass);
   }
 
@@ -326,12 +329,13 @@ CubeProgram::CreateSceneRenderTargets()
   LOG_TRACE("CubeProgram::CreateSceneRenderTargets");
   auto info = SDL_GPUTextureCreateInfo{};
   {
-    info.type = SDL_GPU_TEXTURETYPE_2D,
-    info.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM,
-    info.width = static_cast<Uint32>(vp_width_),
-    info.height = static_cast<Uint32>(vp_height_),
-    info.layer_count_or_depth = 1, info.num_levels = 1,
-    info.sample_count = SDL_GPU_SAMPLECOUNT_1,
+    info.type = SDL_GPU_TEXTURETYPE_2D;
+    info.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
+    info.width = static_cast<Uint32>(vp_width_);
+    info.height = static_cast<Uint32>(vp_height_);
+    info.layer_count_or_depth = 1;
+    info.num_levels = 1;
+    info.sample_count = SDL_GPU_SAMPLECOUNT_1;
     info.usage =
       SDL_GPU_TEXTUREUSAGE_SAMPLER | SDL_GPU_TEXTUREUSAGE_COLOR_TARGET;
   }
@@ -400,6 +404,12 @@ CubeProgram::DrawGui()
       ImGui::Text("Hello world");
       ImGui::Image((ImTextureID)(intptr_t)color_target_,
                    ImVec2((float)vp_width_, (float)vp_height_));
+      ImGui::End();
+    }
+    if (ImGui::Begin("Stats")) {
+      ImGui::Text("Total draws: %u", stats_.total_draws);
+      ImGui::Text("Opaque draws: %u", stats_.opaque_draws);
+      ImGui::Text("Transparent draws: %u", stats_.transparent_draws);
       ImGui::End();
     }
 

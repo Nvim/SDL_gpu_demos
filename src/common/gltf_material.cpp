@@ -15,6 +15,7 @@ GLTFPbrMaterial::Build()
   auto mat = std::make_shared<MaterialInstance>();
 
   mat->Pipeline = nullptr; // TODO: figure out pipeline ownership
+  mat->Opacity = opacity;
 
   CREATE_BINDING(BaseColor, BaseColorTexture, BaseColorSampler);
   CREATE_BINDING(MetalRough, MetalRoughTexture, MetalRoughSampler);

@@ -18,10 +18,21 @@ struct RenderItem
   SharedPtr<MaterialInstance> Material{ nullptr };
 };
 
+struct RenderContext
+{
+  std::vector<RenderItem> OpaqueItems{};
+  std::vector<RenderItem> TransparentItems{};
+  void Clear()
+  {
+    OpaqueItems.clear();
+    TransparentItems.clear();
+  }
+};
+
 struct IRenderable
 {
   // push RenderItems to the list
-  virtual void Draw(glm::mat4 matrix, std::vector<RenderItem>& draws) = 0;
+  virtual void Draw(glm::mat4 matrix, RenderContext& context) = 0;
 };
 
 struct Geometry
@@ -55,14 +66,14 @@ struct SceneNode : public IRenderable
   glm::mat4 LocalMatrix;
   glm::mat4 WorldMatrix;
   void Update(glm::mat4 parentMatrix);
-  void Draw(glm::mat4 matrix, std::vector<RenderItem>& draws) override;
+  void Draw(glm::mat4 matrix, RenderContext& context) override;
   virtual ~SceneNode() = default;
 };
 
 struct MeshNode final : public SceneNode
 {
   MeshAsset* Mesh;
-  void Draw(glm::mat4 matrix, std::vector<RenderItem>& draws) override;
+  void Draw(glm::mat4 matrix, RenderContext& context) override;
 };
 
 class Renderer

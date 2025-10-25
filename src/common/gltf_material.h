@@ -20,6 +20,8 @@ struct GLTFPbrMaterial final : public IMaterialBuilder
   f32 OcclusionFactor{ 1.f };
   u32 FeatureFlags{ 0x00 }; // bitfield
 
+  MaterialOpacity opacity = MaterialOpacity::Opaque;
+
   // GPU resources:
   SDL_GPUTexture* BaseColorTexture{ nullptr };
   SDL_GPUSampler* BaseColorSampler{ nullptr };

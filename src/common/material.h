@@ -19,10 +19,17 @@ enum class PbrTextureFlag : u8
   COUNT
 };
 
+enum class MaterialOpacity : u8
+{
+  Opaque = 0,
+  Transparent = 1,
+};
+
 static constexpr u32 MaterialBindingSlot = 1;
 
 // Generic material type, holds everything necessary to draw:
 // - Pipeline
+// - Opacity type
 // - TextureSamplerBindings
 // - UBOs
 struct MaterialInstance
@@ -30,6 +37,7 @@ struct MaterialInstance
   static constexpr u8 TextureCount =
     CastFlag<u8, PbrTextureFlag>(PbrTextureFlag::COUNT);
 
+  MaterialOpacity Opacity = MaterialOpacity::Opaque;
   SDL_GPUGraphicsPipeline* Pipeline;
   std::array<SDL_GPUTextureSamplerBinding, TextureCount> SamplerBindings{};
   UBO<MaterialDataBinding> ubo;
