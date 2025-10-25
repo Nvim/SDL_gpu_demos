@@ -9,6 +9,8 @@
 struct GLTFPbrMaterial final : public IMaterialBuilder
 {
   static constexpr u8 TextureCount = CAST_FLAG(PbrTextureFlag::COUNT);
+  static constexpr u8 VertexUBOCount = 2;
+  static constexpr u8 FragmentUBOCount = 2;
   // Color factors:
   glm::vec4 BaseColorFactor{ 1.f };
   glm::vec4 EmissiveFactor{ 1.f };

@@ -76,8 +76,6 @@ CubeProgram::~CubeProgram()
   // TODO: segfaults:
   RELEASE_IF(vertex_, SDL_ReleaseGPUShader);
   RELEASE_IF(fragment_, SDL_ReleaseGPUShader);
-  RELEASE_IF(ScenePipeline, SDL_ReleaseGPUGraphicsPipeline);
-  RELEASE_IF(scene_wireframe_pipeline_, SDL_ReleaseGPUGraphicsPipeline);
   RELEASE_IF(depth_target_, SDL_ReleaseGPUTexture);
   RELEASE_IF(color_target_, SDL_ReleaseGPUTexture);
   loader_.Release();
@@ -99,107 +97,7 @@ CubeProgram::Init()
     return false;
   }
   LOG_DEBUG("Started ImGui");
-  SDL_GPUShaderFormat backendFormats = SDL_GetGPUShaderFormats(Device);
-  if (!(backendFormats & SDL_GPU_SHADERFORMAT_SPIRV)) {
-    LOG_ERROR("Backend doesn't support SPRIR-V");
-    return false;
-  }
 
-  if (!LoadShaders()) {
-    LOG_ERROR("Couldn't load shaders");
-    return false;
-  }
-  LOG_DEBUG("Loaded shaders");
-
-  SDL_GPUColorTargetDescription color_descs[1]{};
-  color_descs[0].format = SDL_GetGPUSwapchainTextureFormat(Device, Window);
-
-  static constexpr size_t FLOAT4 = sizeof(glm::vec4);
-  static constexpr size_t FLOAT3 = sizeof(glm::vec3);
-  static constexpr size_t FLOAT2 = sizeof(glm::vec2);
-  static_assert(FLOAT4 == 16);
-  static_assert(FLOAT3 == 12);
-  static_assert(FLOAT2 == 8);
-  SDL_GPUVertexAttribute vertex_attributes[] = {
-    { .location = 0,
-      .buffer_slot = 0,
-      .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3,
-      .offset = 0 },
-    { .location = 1,
-      .buffer_slot = 0,
-      .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3,
-      .offset = FLOAT3 },
-    { .location = 2,
-      .buffer_slot = 0,
-      .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4,
-      .offset = 2 * FLOAT3 },
-    { .location = 3,
-      .buffer_slot = 0,
-      .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2,
-      .offset = 2 * FLOAT3 + FLOAT4 },
-    { .location = 4,
-      .buffer_slot = 0,
-      .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4,
-      .offset = 2 * FLOAT3 + FLOAT4 + FLOAT2 },
-  };
-
-  static_assert((2 * FLOAT3 + FLOAT4 + FLOAT2 + FLOAT4) ==
-                sizeof(PosNormalTangentColorUvVertex));
-
-  SDL_GPUVertexBufferDescription vertex_desc[] = { {
-    .slot = 0,
-    .pitch = sizeof(PosNormalTangentColorUvVertex),
-    .input_rate = SDL_GPU_VERTEXINPUTRATE_VERTEX,
-    .instance_step_rate = 0,
-  } };
-
-  SDL_GPUGraphicsPipelineCreateInfo pipelineCreateInfo{};
-  {
-    pipelineCreateInfo.vertex_shader = vertex_;
-    pipelineCreateInfo.fragment_shader = fragment_;
-    pipelineCreateInfo.primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;
-    {
-      auto& state = pipelineCreateInfo.vertex_input_state;
-      state.vertex_buffer_descriptions = vertex_desc;
-      state.num_vertex_buffers = 1;
-      state.vertex_attributes = vertex_attributes;
-      state.num_vertex_attributes = 5;
-    }
-    {
-      auto& state = pipelineCreateInfo.rasterizer_state;
-      state.fill_mode = SDL_GPU_FILLMODE_FILL,
-      state.cull_mode = SDL_GPU_CULLMODE_NONE;
-      state.front_face = SDL_GPU_FRONTFACE_COUNTER_CLOCKWISE;
-    }
-    {
-      auto& state = pipelineCreateInfo.depth_stencil_state;
-      state.compare_op = SDL_GPU_COMPAREOP_LESS;
-      state.enable_depth_test = true;
-      state.enable_depth_write = true;
-      state.enable_stencil_test = false;
-    }
-    {
-      auto& info = pipelineCreateInfo.target_info;
-      info.color_target_descriptions = color_descs;
-      info.num_color_targets = 1;
-      info.depth_stencil_format = SDL_GPU_TEXTUREFORMAT_D16_UNORM;
-      info.has_depth_stencil_target = true;
-    }
-  }
-
-  ScenePipeline = SDL_CreateGPUGraphicsPipeline(Device, &pipelineCreateInfo);
-  if (ScenePipeline == NULL) {
-    LOG_ERROR("Couldn't create pipeline!");
-    return false;
-  }
-  pipelineCreateInfo.rasterizer_state.fill_mode = SDL_GPU_FILLMODE_LINE;
-  scene_wireframe_pipeline_ =
-    SDL_CreateGPUGraphicsPipeline(Device, &pipelineCreateInfo);
-  if (scene_wireframe_pipeline_ == NULL) {
-    LOG_ERROR("Couldn't create wireframe pipeline!");
-    return false;
-  }
-  LOG_DEBUG("Created pipelines");
   scene_ = loader_.Load(default_scene_path_);
   if (!scene_.get()) {
     LOG_CRITICAL("Couldn't initialize GLTF loader");
@@ -419,17 +317,6 @@ bool
 CubeProgram::LoadShaders()
 {
   LOG_TRACE("CubeProgram::LoadShaders");
-  vertex_ = LoadShader(vertex_path_, Device, 0, 2, 0, 0);
-  if (vertex_ == nullptr) {
-    LOG_ERROR("Couldn't load vertex shader at path {}", vertex_path_);
-    return false;
-  }
-  fragment_ =
-    LoadShader(fragment_path_, Device, GLTFPbrMaterial::TextureCount, 2, 0, 0);
-  if (fragment_ == nullptr) {
-    LOG_ERROR("Couldn't load fragment shader at path {}", fragment_path_);
-    return false;
-  }
   return true;
 }
 

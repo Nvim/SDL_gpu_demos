@@ -35,6 +35,11 @@ public:
   void Release(); // Callable dtor, must be destroyed before app
 
 public:
+  static constexpr const char* VertexShaderPath =
+    "resources/shaders/compiled/vert.spv";
+  static constexpr const char* FragmentShaderPath =
+    "resources/shaders/compiled/frag.spv";
+
 private:
   bool LoadVertexData(GLTFScene* ret);
   bool LoadSamplers(GLTFScene* ret);
@@ -64,6 +69,8 @@ private:
   bool CreateDefaultTexture();
   bool CreateDefaultSampler();
   void CreateDefaultMaterial();
+  bool CreatePipelines();
+  bool IsInitialized();
 
 private:
   Program* program_;
@@ -73,6 +80,9 @@ private:
   SDL_GPUSampler* default_sampler_{ nullptr };
   SDL_GPUTexture* default_texture_{ nullptr };
   SharedPtr<GLTFPbrMaterial> default_material_{ nullptr };
+
+  SDL_GPUGraphicsPipeline* opaque_pipeline_{ nullptr };
+  SDL_GPUGraphicsPipeline* transparent_pipeline_{ nullptr };
 };
 
 template<typename V, typename I>

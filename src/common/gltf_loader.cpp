@@ -2,7 +2,6 @@
 
 #include "common/gltf_loader.h"
 
-#include "apps/pbr/pbr_app.h" // TODO: remove!
 #include "common/rendersystem.h"
 #include "common/tangent_loader.h"
 #include "common/types.h"
@@ -65,7 +64,39 @@ extract_mipmap_mode(fastgltf::Filter filter)
 GLTFLoader::GLTFLoader(Program* program)
   : program_{ program }
 {
+
   tangent_loader_ = std::make_unique<OGLDevTangentLoader>();
+
+  if (!CreatePipelines()) {
+    LOG_ERROR("Couldn't create default sampler");
+    return;
+  }
+
+  if (!CreateDefaultSampler()) {
+    LOG_ERROR("Couldn't create default sampler");
+    return;
+  }
+  if (!CreateDefaultTexture()) {
+    LOG_ERROR("Couldn't create default texture");
+    return;
+  }
+  CreateDefaultMaterial();
+}
+
+bool
+GLTFLoader::IsInitialized()
+{
+  // clang-format off
+  return (
+    program_ != nullptr &&
+    tangent_loader_ != nullptr &&
+    opaque_pipeline_ != nullptr &&
+    transparent_pipeline_ != nullptr &&
+    default_sampler_ != nullptr &&
+    default_texture_ != nullptr &&
+    default_material_ != nullptr
+  );
+  // clang-format on
 }
 
 GLTFLoader::~GLTFLoader()
@@ -94,12 +125,8 @@ GLTFLoader::Load(std::filesystem::path& path)
     return nullptr;
   }
 
-  if (!CreateDefaultSampler()) {
-    LOG_ERROR("Couldn't create default sampler");
-    return nullptr;
-  }
-  if (!CreateDefaultTexture()) {
-    LOG_ERROR("Couldn't create default texture");
+  if (!IsInitialized()) {
+    LOG_ERROR("Loader isn't initalized");
     return nullptr;
   }
 
@@ -122,6 +149,11 @@ GLTFLoader::Load(GLTFScene* scene, std::filesystem::path& path)
   LOG_TRACE("GLTFLoader::Load");
   if (!std::filesystem::exists(path)) {
     LOG_ERROR("path {} is invalid", path.c_str());
+    return false;
+  }
+
+  if (!transparent_pipeline_ || !opaque_pipeline_) {
+    LOG_ERROR("Default pipelines aren't initalized");
     return false;
   }
 
@@ -311,9 +343,8 @@ GLTFLoader::LoadVertexData(GLTFScene* ret)
         } else {
           newGeometry.material = ret->materials_[0]->Build();
         }
-        // TODO!
-        newGeometry.material->Pipeline =
-          static_cast<CubeProgram*>(program_)->ScenePipeline;
+        // TODO: blending
+        newGeometry.material->Pipeline = opaque_pipeline_;
       }
 
       { // tangents:
@@ -922,4 +953,94 @@ GLTFLoader::CreateDefaultMaterial()
     return;
   }
   default_material_ = std::make_shared<GLTFPbrMaterial>();
+}
+
+bool
+GLTFLoader::CreatePipelines()
+{
+  auto Device = program_->Device;
+  auto Window = program_->Window;
+
+  SDL_GPUShader* vs{ nullptr };
+  SDL_GPUShader* fs{ nullptr };
+
+  { // Shader loading
+    SDL_GPUShaderFormat backendFormats = SDL_GetGPUShaderFormats(Device);
+    if (!(backendFormats & SDL_GPU_SHADERFORMAT_SPIRV)) {
+      LOG_ERROR("Backend doesn't support SPRIR-V");
+      return false;
+    }
+    auto samplers = GLTFPbrMaterial::TextureCount;
+    auto vertUbos = GLTFPbrMaterial::VertexUBOCount;
+    auto fragUbos = GLTFPbrMaterial::FragmentUBOCount;
+    vs = LoadShader(VertexShaderPath, Device, 0, vertUbos, 0, 0);
+    if (vs == nullptr) {
+      LOG_ERROR("Couldn't load vertex shader at path {}", VertexShaderPath);
+      return false;
+    }
+    fs = LoadShader(FragmentShaderPath, Device, samplers, fragUbos, 0, 0);
+    if (fs == nullptr) {
+      LOG_ERROR("Couldn't load fragment shader at path {}", FragmentShaderPath);
+      return false;
+    }
+  }
+
+  // TODO: query client's available modes and select an HDR mode:
+  SDL_GPUColorTargetDescription color_descs[1]{};
+  color_descs[0].format = SDL_GetGPUSwapchainTextureFormat(Device, Window);
+
+  SDL_GPUVertexBufferDescription vertex_desc[] = { {
+    .slot = 0,
+    .pitch = sizeof(PosNormalTangentColorUvVertex),
+    .input_rate = SDL_GPU_VERTEXINPUTRATE_VERTEX,
+    .instance_step_rate = 0,
+  } };
+
+  SDL_GPUGraphicsPipelineCreateInfo pipelineCreateInfo{};
+  {
+    pipelineCreateInfo.vertex_shader = vs;
+    pipelineCreateInfo.fragment_shader = fs;
+    pipelineCreateInfo.primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;
+    {
+      auto& state = pipelineCreateInfo.vertex_input_state;
+      state.vertex_buffer_descriptions = vertex_desc;
+      state.num_vertex_buffers = 1;
+      state.vertex_attributes = PosNormalTangentColorUvAttributes;
+      state.num_vertex_attributes = PosNormalTangentColorUvAttributeCount;
+    }
+    {
+      auto& state = pipelineCreateInfo.rasterizer_state;
+      state.fill_mode = SDL_GPU_FILLMODE_FILL,
+      state.cull_mode = SDL_GPU_CULLMODE_NONE;
+      state.front_face = SDL_GPU_FRONTFACE_COUNTER_CLOCKWISE;
+    }
+    {
+      auto& state = pipelineCreateInfo.depth_stencil_state;
+      state.compare_op = SDL_GPU_COMPAREOP_LESS;
+      state.enable_depth_test = true;
+      state.enable_depth_write = true;
+      state.enable_stencil_test = false;
+    }
+    {
+      auto& info = pipelineCreateInfo.target_info;
+      info.color_target_descriptions = color_descs;
+      info.num_color_targets = 1;
+      info.depth_stencil_format = SDL_GPU_TEXTUREFORMAT_D16_UNORM;
+      info.has_depth_stencil_target = true;
+    }
+  }
+
+  opaque_pipeline_ = SDL_CreateGPUGraphicsPipeline(Device, &pipelineCreateInfo);
+  if (opaque_pipeline_ == nullptr) {
+    LOG_ERROR("Couldn't create pipeline!");
+    return false;
+  }
+  // TODO: toggle alpha blending
+  transparent_pipeline_ =
+    SDL_CreateGPUGraphicsPipeline(Device, &pipelineCreateInfo);
+  if (opaque_pipeline_ == nullptr) {
+    LOG_ERROR("Couldn't create pipeline!");
+    return false;
+  }
+  return true;
 }

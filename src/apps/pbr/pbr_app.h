@@ -76,8 +76,6 @@ public:
   ~CubeProgram();
 
 public:
-  SDL_GPUGraphicsPipeline* ScenePipeline{ nullptr };
-
 private:
   bool InitGui();
   bool LoadShaders();
@@ -120,7 +118,6 @@ private:
   // TODO: store scene-related GPU Resources in GLTF scene class
   SDL_GPUShader* vertex_{ nullptr };
   SDL_GPUShader* fragment_{ nullptr };
-  SDL_GPUGraphicsPipeline* scene_wireframe_pipeline_{ nullptr };
   SDL_GPUColorTargetInfo scene_color_target_info_{};
   SDL_GPUDepthStencilTargetInfo scene_depth_target_info_{};
   SDL_GPUColorTargetInfo swapchain_target_info_{};

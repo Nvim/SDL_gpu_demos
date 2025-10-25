@@ -5,6 +5,13 @@
 #include <SDL3/SDL_gpu.h>
 #include <type_traits>
 
+static constexpr size_t FLOAT4 = sizeof(glm::vec4);
+static constexpr size_t FLOAT3 = sizeof(glm::vec3);
+static constexpr size_t FLOAT2 = sizeof(glm::vec2);
+static_assert(FLOAT4 == 16);
+static_assert(FLOAT3 == 12);
+static_assert(FLOAT2 == 8);
+
 struct PosVertex
 {
   float pos[3];
@@ -44,6 +51,34 @@ struct PosNormalTangentColorUvVertex
   glm::vec2 uv{ 0.f };
   glm::vec4 color{ 1.f };
 };
+
+static constexpr size_t PosNormalTangentColorUvAttributeCount = 5;
+static constexpr SDL_GPUVertexAttribute
+  PosNormalTangentColorUvAttributes[PosNormalTangentColorUvAttributeCount] = {
+    { .location = 0,
+      .buffer_slot = 0,
+      .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3,
+      .offset = 0 },
+    { .location = 1,
+      .buffer_slot = 0,
+      .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3,
+      .offset = FLOAT3 },
+    { .location = 2,
+      .buffer_slot = 0,
+      .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4,
+      .offset = 2 * FLOAT3 },
+    { .location = 3,
+      .buffer_slot = 0,
+      .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2,
+      .offset = 2 * FLOAT3 + FLOAT4 },
+    { .location = 4,
+      .buffer_slot = 0,
+      .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4,
+      .offset = 2 * FLOAT3 + FLOAT4 + FLOAT2 },
+  };
+
+static_assert((2 * FLOAT3 + FLOAT4 + FLOAT2 + FLOAT4) ==
+              sizeof(PosNormalTangentColorUvVertex));
 
 #define RELEASE_IF(ptr, release_func)                                          \
   if (ptr != nullptr) {                                                        \
