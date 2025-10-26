@@ -101,8 +101,10 @@ private:
 private:
   // Internals:
   bool quit{ false };
+  const int vp_width_{ 640 };
+  const int vp_height_{ 480 };
   Transform global_transform_;
-  Camera camera_{ glm::radians(60.0f), 640 / 480.f, .1f, 100.f };
+  Camera camera_{ glm::radians(60.0f), vp_width_ / (f32)vp_height_, .1f, 100.f };
   Skybox skybox_{ "resources/textures/skybox", Window, Device };
   GLTFLoader loader_{ this };
   std::filesystem::path default_scene_path_{
@@ -116,8 +118,6 @@ private:
   std::future<UniquePtr<GLTFScene>> scene_future_;
   const char* vertex_path_;
   const char* fragment_path_;
-  const int vp_width_{ 640 };
-  const int vp_height_{ 480 };
   Stats stats_;
 
   // User controls:

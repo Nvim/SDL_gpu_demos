@@ -113,10 +113,9 @@ CubeProgram::Init()
   LOG_DEBUG("Created render target textures");
 
   global_transform_.translation_ = { 0.f, 0.f, 0.0f };
-  global_transform_.scale_ = { 1.5f, 1.5f, 1.5f };
+  global_transform_.scale_ = { 1.f, 1.f, 1.f };
 
   camera_.Position = glm::vec3{ 0.f, 0.f, 6.5f };
-  camera_.Target = glm::vec3{ 0.f, 0.f, 0.f };
 
   LOG_INFO("Initialized application");
   return true;
@@ -141,10 +140,8 @@ CubeProgram::Poll()
       if (evt.key.key == SDLK_ESCAPE) {
         quit = true;
       }
-      // if (evt.key.key == SDLK_SPACE) {
-      //   ChangeScene();
-      // }
     }
+    camera_.Poll(evt);
   }
 
   if (scene_picker_.CurrentAsset != scene_->Path && !is_loading_scene) {
@@ -417,10 +414,17 @@ CubeProgram::DrawGui()
 
     if (ImGui::Begin("Settings")) {
       if (ImGui::TreeNode("Camera")) {
+        ImGui::Text("Position");
         if (ImGui::SliderFloat("X", (float*)&camera_.Position.x, -50.f, 50.f) ||
             ImGui::SliderFloat("Y", (float*)&camera_.Position.y, -50.f, 50.f) ||
             ImGui::SliderFloat("Z", (float*)&camera_.Position.z, -50.f, 50.f)) {
-          camera_.Touched = true;
+          camera_.Moved = true;
+        }
+        ImGui::Text("Rotation");
+        if (ImGui::SliderFloat("Yaw", (float*)&camera_.Yaw, -90.f, 90.f) ||
+            ImGui::SliderFloat("Pitch", (float*)&camera_.Pitch, -90.f, 90.f)
+        ) {
+          camera_.Rotated = true;
         }
         ImGui::TreePop();
       }

@@ -16,7 +16,6 @@
 #include <fastgltf/math.hpp>
 #include <fastgltf/tools.hpp>
 #include <fastgltf/types.hpp>
-#define GLM_ENABLE_EXPERIMENTAL 1
 #include <glm/ext/quaternion_common.hpp>
 #include <glm/ext/quaternion_float.hpp>
 #include <glm/gtx/quaternion.hpp>
