@@ -71,9 +71,10 @@ CubeProgram::CubeProgram(SDL_GPUDevice* device,
 CubeProgram::~CubeProgram()
 {
   LOG_TRACE("Destroying app");
-  scene_->Release();
+  for (auto it = scenes_.begin(); it != scenes_.end(); it++) {
+    it->get()->Release();
+  }
 
-  // TODO: segfaults:
   RELEASE_IF(vertex_, SDL_ReleaseGPUShader);
   RELEASE_IF(fragment_, SDL_ReleaseGPUShader);
   RELEASE_IF(depth_target_, SDL_ReleaseGPUTexture);
@@ -98,13 +99,13 @@ CubeProgram::Init()
   }
   LOG_DEBUG("Started ImGui");
 
-  scene_ = loader_.Load(default_scene_path_);
-  if (!scene_.get()) {
+  scenes_.push_back(loader_.Load(default_scene_path_));
+  if (!scenes_[0].get()) {
     LOG_CRITICAL("Couldn't initialize GLTF loader");
     return false;
   }
-  assert(!scene_->Meshes().empty());
-  LOG_INFO("Loaded {} meshes", scene_->Meshes().size());
+  assert(!scenes_[0]->Meshes().empty());
+  LOG_INFO("Loaded {} meshes", scenes_[0]->Meshes().size());
 
   if (!CreateSceneRenderTargets()) {
     LOG_ERROR("Couldn't create render target textures!");
@@ -141,10 +142,10 @@ CubeProgram::Poll()
         quit = true;
       }
     }
-    camera_.Poll(evt);
   }
 
-  if (scene_picker_.CurrentAsset != scene_->Path && !is_loading_scene) {
+  static auto last_asset = scenes_[0]->Path;
+  if (scene_picker_.CurrentAsset != last_asset && !is_loading_scene) {
     ChangeScene();
   }
 
@@ -156,11 +157,11 @@ CubeProgram::Poll()
     if (ret == nullptr) {
       LOG_ERROR("Failed loading scene `{}`",
                 scene_picker_.CurrentAsset.c_str());
-      scene_picker_.CurrentAsset = scene_->Path; // restore former scene
+      scene_picker_.CurrentAsset = last_asset; // restore former scene
       return true;
     }
-    scene_->Release();
-    scene_ = std::move(ret);
+    last_asset = scene_picker_.CurrentAsset;
+    scenes_.push_back(std::move(ret));
   }
 
   return true;
@@ -177,10 +178,12 @@ CubeProgram::UpdateScene()
     }
   }
 
-  for (const auto& node : scene_->ParentNodes()) {
-    node->Update(global_transform_.Matrix());
+  for (const auto& scene : scenes_) {
+    for (const auto& node : scene->ParentNodes()) {
+      node->Update(global_transform_.Matrix());
+    }
   }
-  camera_.Update();
+  camera_.Update(DeltaTime);
 }
 
 bool
@@ -263,7 +266,9 @@ CubeProgram::Draw()
         scenePass, draw.VertexCount, total_instances, draw.FirstIndex, 0, 0);
     };
 
-    scene_->Draw(glm::mat4{ 1.0f }, render_context_);
+    for (const auto& scene : scenes_) {
+      scene->Draw(glm::mat4{ 1.0f }, render_context_);
+    }
     for (const auto& draw : render_context_.OpaqueItems) {
       DrawCall(draw);
       stats_.opaque_draws++;
@@ -422,8 +427,7 @@ CubeProgram::DrawGui()
         }
         ImGui::Text("Rotation");
         if (ImGui::SliderFloat("Yaw", (float*)&camera_.Yaw, -90.f, 90.f) ||
-            ImGui::SliderFloat("Pitch", (float*)&camera_.Pitch, -90.f, 90.f)
-        ) {
+            ImGui::SliderFloat("Pitch", (float*)&camera_.Pitch, -90.f, 90.f)) {
           camera_.Rotated = true;
         }
         ImGui::TreePop();

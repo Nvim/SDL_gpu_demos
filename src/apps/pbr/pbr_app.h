@@ -104,7 +104,10 @@ private:
   const int vp_width_{ 640 };
   const int vp_height_{ 480 };
   Transform global_transform_;
-  Camera camera_{ glm::radians(60.0f), vp_width_ / (f32)vp_height_, .1f, 100.f };
+  Camera camera_{ glm::radians(60.0f),
+                  vp_width_ / (f32)vp_height_,
+                  .1f,
+                  100.f };
   Skybox skybox_{ "resources/textures/skybox", Window, Device };
   GLTFLoader loader_{ this };
   std::filesystem::path default_scene_path_{
@@ -112,7 +115,7 @@ private:
     MODELS_DIR / "AlphaBlendModeTest.glb"
   };
   RenderContext render_context_{};
-  UniquePtr<GLTFScene> scene_{};
+  std::vector<UniquePtr<GLTFScene>> scenes_{};
   ScenePicker scene_picker_{ MODELS_DIR, default_scene_path_ };
   bool is_loading_scene{ false };
   std::future<UniquePtr<GLTFScene>> scene_future_;

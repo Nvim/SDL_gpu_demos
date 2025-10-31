@@ -13,8 +13,7 @@ public:
     float far=100.f
   );
   // clang-format on
-  void Poll(SDL_Event& evt);
-  void Update();
+  void Update(f32 delta);
   const glm::mat4& Projection() const { return proj_; }
   const glm::mat4& View() const { return view_; }
   const glm::mat4& Model() const { return model_; }
@@ -28,15 +27,20 @@ public:
   bool Rotated{ true };
 
 private:
-  glm::vec3 velocity_{ 0.f, 0.f, 0.f };
+  void handle_input(f32 delta);
+
+private:
   glm::mat4 proj_;
   glm::mat4 view_;
   glm::mat4 model_;
   glm::mat4 rotation_;
+
+  // glm::vec3 lookat_{ 0.0f, 0.0f, 0.0f }; // direction camera is looking at
+  // glm::vec3 up_{ 0.0f, -1.0f, 0.0f };
+  // glm::vec3 right_{ 1.0f, 0.0f, 0.0f };
   // TODO: storing these for GUI config
   float fov_;
   [[maybe_unused]] float aspect_;
   [[maybe_unused]] float near_;
   [[maybe_unused]] float far_;
-  glm::vec3 up_;
 };
