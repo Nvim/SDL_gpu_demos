@@ -9,8 +9,10 @@
 class Skybox
 {
 public:
-  explicit Skybox(const char* dir, SDL_Window* window, SDL_GPUDevice* device);
-  explicit Skybox(const char* dir,
+  explicit Skybox(const std::filesystem::path path,
+                  SDL_Window* window,
+                  SDL_GPUDevice* device);
+  explicit Skybox(const std::filesystem::path path,
                   const char* vert_path,
                   const char* frag_path,
                   SDL_Window* window,
@@ -23,6 +25,10 @@ public:
 public:
   const char* VertPath = "resources/shaders/compiled/skybox.vert.spv";
   const char* FragPath = "resources/shaders/compiled/skybox.frag.spv";
+  static constexpr const char* SDR_FRAGMENT_SHADER =
+    "resources/shaders/compiled/skybox.frag.spv";
+  static constexpr const char* HDR_FRAGMENT_SHADER =
+    "resources/shaders/compiled/skybox_hdr.frag.spv";
   UniquePtr<Cubemap> Cubemap{};
   SDL_GPUSampler* CubemapSampler{};
   SDL_GPUBuffer* VertexBuffer{};
@@ -35,7 +41,7 @@ private:
   bool SendVertexData() const;
 
 private:
-  const char* dir_{};
+  const std::filesystem::path path_{};
   SDL_GPUDevice* device_{}; // needed for dtor
   SDL_Window* window_{};    // needed swapchain format
   bool loaded_{ false };

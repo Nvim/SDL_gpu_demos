@@ -14,15 +14,11 @@
 
 CubeProgram::CubeProgram(SDL_GPUDevice* device,
                          SDL_Window* window,
-                         const char* vertex_path,
-                         const char* fragment_path,
                          int w,
                          int h)
   : Program{ device, window }
   , vp_width_{ w }
   , vp_height_{ h }
-  , vertex_path_{ vertex_path }
-  , fragment_path_{ fragment_path }
 {
   {
     scene_color_target_info_.clear_color = { 0.1f, 0.1f, 0.1f, 1.0f };
@@ -93,11 +89,17 @@ bool
 CubeProgram::Init()
 {
   LOG_TRACE("CubeProgram::Init");
+
   if (!InitGui()) {
     LOG_ERROR("Couldn't init imgui");
     return false;
   }
   LOG_DEBUG("Started ImGui");
+
+  if (!skybox_.IsLoaded()) {
+    LOG_CRITICAL("Couldn't load skybox");
+    return false;
+  }
 
   scenes_.push_back(loader_.Load(default_scene_path_));
   if (!scenes_[0].get()) {

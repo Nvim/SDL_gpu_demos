@@ -16,37 +16,6 @@ find_package(glm REQUIRED)
 find_package(simdjson REQUIRED)
 
 add_subdirectory(${PROJECT_SOURCE_DIR}/thirdparty)
-# Imgui
-add_library(imgui)
-target_include_directories(imgui PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/imgui")
-target_sources(imgui PRIVATE 
-"${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/imgui/imgui.cpp"
-"${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/imgui/imgui_demo.cpp"
-"${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/imgui/imgui_draw.cpp"
-"${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/imgui/imgui_tables.cpp"
-"${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/imgui/imgui_widgets.cpp"
-"${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/imgui/backends/imgui_impl_sdlgpu3.cpp"
-"${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/imgui/backends/imgui_impl_sdl3.cpp"
-)
-
-# Fastgltf
-set(FASTGLTF_COMPILE_AS_CPP20 YES CACHE BOOL "Compile fastgltf as C++20" )
-set(FASTGLTF_ENABLE_TESTS NO CACHE BOOL "Disable fastgltf tests" )
-set(FASTGLTF_ENABLE_EXAMPLES NO CACHE BOOL "Disable fastgltf examples" )
-set(FASTGLTF_ENABLE_DOCS NO CACHE BOOL "disable fastgltf docs" )
-add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/fastgltf")
-
-target_link_libraries(imgui PUBLIC SDL3::SDL3)
-
-# Spdlog
-set(SPDLOG_BUILD_EXAMPLE OFF CACHE BOOL "Disable SPDLOG example builds")
-set(SPDLOG_BUILD_BENCH OFF CACHE BOOL "Disable SPDLOG benchmark builds")
-set(SPDLOG_BUILD_TESTS OFF CACHE BOOL "Disable SPDLOG test builds")
-set(SPDLOG_BUILD_SHARED OFF CACHE BOOL "Disable SPDLOG shared library builds")
-add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/spdlog")
-
-# SDL
-# add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/SDL")
 
 # Project executable
 add_executable(${PROJECT_NAME})
@@ -66,6 +35,7 @@ target_link_libraries(${PROJECT_NAME} PUBLIC
   stb::stb 
   cxx_setup
   mikktspace
+  ktx
 )
 
 target_precompile_headers(${PROJECT_NAME} PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src/pch.h")

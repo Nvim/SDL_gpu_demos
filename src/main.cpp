@@ -43,12 +43,7 @@ main()
   LOG_DEBUG("GPU claimed Window");
 
   { // app lifecycle
-    CubeProgram app{ Device,
-                     Window,
-                     "resources/shaders/compiled/vert.spv",
-                     "resources/shaders/compiled/frag.spv",
-                     1200,
-                     900 };
+    CubeProgram app{ Device, Window, 1200, 900 };
 
     if (!app.Init()) {
       LOG_CRITICAL("Couldn't init app.");

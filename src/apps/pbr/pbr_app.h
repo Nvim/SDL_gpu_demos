@@ -77,12 +77,7 @@ class CubeProgram : public Program
   };
 
 public:
-  CubeProgram(SDL_GPUDevice* device,
-              SDL_Window* window,
-              const char* vertex_path,
-              const char* fragment_path,
-              int w,
-              int h);
+  CubeProgram(SDL_GPUDevice* device, SDL_Window* window, int w, int h);
   bool Init() override;
   bool Poll() override;
   bool Draw() override;
@@ -107,7 +102,7 @@ private:
                   vp_width_ / (f32)vp_height_,
                   .1f,
                   100.f };
-  Skybox skybox_{ "resources/textures/skybox", Window, Device };
+  Skybox skybox_{ "resources/textures/plains_sunset.ktx2", Window, Device };
   GLTFLoader loader_{ this };
   std::filesystem::path default_scene_path_{
     // MODELS_DIR / "DamagedHelmet/DamagedHelmetWithTangents.glb"

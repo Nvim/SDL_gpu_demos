@@ -9,6 +9,7 @@ mkdir -p "$OUT"
 glslang $SRC/frag.frag -V -o $OUT/frag.spv -I$SRC;
 glslang $SRC/vert.vert -V -o $OUT/vert.spv -I$SRC;
 glslang $SRC/skybox.frag -V -o $OUT/skybox.frag.spv;
+glslang $SRC/skybox_hdr.frag -V -o $OUT/skybox_hdr.frag.spv;
 glslang $SRC/skybox.vert -V -o $OUT/skybox.vert.spv -I$SRC;
 
 ## 

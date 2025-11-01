@@ -3,8 +3,10 @@
 #include "common/cubemap.h"
 #include "skybox.h"
 
-Skybox::Skybox(const char* dir, SDL_Window* window, SDL_GPUDevice* device)
-  : dir_{ dir }
+Skybox::Skybox(const std::filesystem::path path,
+               SDL_Window* window,
+               SDL_GPUDevice* device)
+  : path_{ path }
   , device_{ device }
   , window_{ window }
 {
@@ -13,14 +15,14 @@ Skybox::Skybox(const char* dir, SDL_Window* window, SDL_GPUDevice* device)
   }
 }
 
-Skybox::Skybox(const char* dir,
+Skybox::Skybox(const std::filesystem::path path,
                const char* vert_path,
                const char* frag_path,
                SDL_Window* window,
                SDL_GPUDevice* device)
   : VertPath{ vert_path }
   , FragPath{ frag_path }
-  , dir_{ dir }
+  , path_{ path }
   , device_{ device }
   , window_{ window }
 {
@@ -41,9 +43,22 @@ Skybox::Init()
 {
   LOG_TRACE("Skybox::Init");
 
-  static MultifileCubeMapLoader loader{ device_ };
-  auto format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM; // TODO: handle hdr?
-  Cubemap = loader.Load(dir_, CubeMapUsage::Skybox, format);
+  if (!std::filesystem::exists(path_)) {
+    LOG_ERROR("Invalid path: {}", path_.c_str());
+    return false;
+  }
+
+  // TODO: store loader instancees in engine
+  ICubemapLoader* loader;
+  if (std::filesystem::is_directory(path_)) {
+    loader = new MultifileCubemapLoader{ device_ };
+    FragPath = SDR_FRAGMENT_SHADER;
+  } else {
+    loader = new KtxCubemapLoader{ device_ };
+    FragPath = HDR_FRAGMENT_SHADER;
+  }
+
+  Cubemap = loader->Load(path_, CubeMapUsage::Skybox);
   if (Cubemap == nullptr) {
     LOG_ERROR("couldn't load skybox textures");
     return false;
