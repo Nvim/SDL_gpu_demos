@@ -1,9 +1,7 @@
 #include <pch.h>
 
+#include "common/cubemap.h"
 #include "skybox.h"
-
-#include <SDL3/SDL_stdinc.h>
-#include <SDL3/SDL_surface.h>
 
 Skybox::Skybox(const char* dir, SDL_Window* window, SDL_GPUDevice* device)
   : dir_{ dir }
@@ -35,11 +33,6 @@ Skybox::~Skybox()
 {
   LOG_TRACE("Destroying Skybox");
   auto* Device = device_;
-  for (const auto tx : faces) {
-    RELEASE_IF(tx, SDL_ReleaseGPUTexture)
-  }
-  RELEASE_IF(Cubemap, SDL_ReleaseGPUTexture);
-  RELEASE_IF(CubemapSampler, SDL_ReleaseGPUSampler);
   RELEASE_IF(Pipeline, SDL_ReleaseGPUGraphicsPipeline);
 }
 
@@ -47,6 +40,15 @@ bool
 Skybox::Init()
 {
   LOG_TRACE("Skybox::Init");
+
+  static MultifileCubeMapLoader loader{ device_ };
+  auto format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM; // TODO: handle hdr?
+  Cubemap = loader.Load(dir_, CubeMapUsage::Skybox, format);
+  if (Cubemap == nullptr) {
+    LOG_ERROR("couldn't load skybox textures");
+    return false;
+  }
+
   if (!CreatePipeline()) {
     LOG_ERROR("Couldn't create skybox pipeline");
     return false;
@@ -77,11 +79,6 @@ Skybox::Init()
 
   if (!SendVertexData()) {
     LOG_ERROR("couldn't send skybox vertex data");
-    return false;
-  }
-
-  if (!LoadTextures()) {
-    LOG_ERROR("couldn't load skybox textures");
     return false;
   }
 
@@ -216,122 +213,11 @@ Skybox::SendVertexData() const
   return ret;
 }
 
-bool
-Skybox::LoadTextures()
-{
-  LOG_TRACE("Skybox::LoadTextures");
-  std::vector<SDL_Surface*> imgs;
-  { // Load all faces in memory
-    for (int i = 0; i < 6; ++i) {
-      char pth[256];
-      snprintf(pth, 256, "%s/%s", dir_, paths[i]);
-      auto img = LoadImage(pth);
-      if (!img) {
-        LOG_ERROR("couldn't load skybox texture: {}", GETERR);
-        for (int j = 0; j < i; ++j) {
-          SDL_DestroySurface(imgs[j]);
-        }
-        return false;
-      }
-      imgs.push_back(img);
-    }
-  }
-  auto freeImg = [](SDL_Surface* i) { SDL_DestroySurface(i); };
-  Uint32 bytes_per_px =
-    SDL_GetPixelFormatDetails(imgs[0]->format)->bytes_per_pixel;
-  SDL_assert(bytes_per_px == 4);
-  Uint32 imgW = imgs[0]->w;
-  Uint32 imgH = imgs[0]->h;
-  Uint32 imgSz = imgs[0]->h * imgs[0]->w * bytes_per_px;
-
-  SDL_GPUTransferBufferCreateInfo info{};
-  {
-    info.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
-    info.size = imgSz * 6;
-  };
-  SDL_GPUTransferBuffer* trBuf = SDL_CreateGPUTransferBuffer(device_, &info);
-
-  if (!trBuf) {
-    std::for_each(imgs.begin(), imgs.end(), freeImg);
-    LOG_ERROR("couldn't create GPU transfer buffer: {}", GETERR);
-    return false;
-  }
-
-  { // Map transfer buffer and memcpy data
-    Uint8* textureTransferPtr =
-      (Uint8*)SDL_MapGPUTransferBuffer(device_, trBuf, false);
-    if (!textureTransferPtr) {
-      std::for_each(imgs.begin(), imgs.end(), freeImg);
-      SDL_ReleaseGPUTransferBuffer(device_, trBuf);
-      LOG_ERROR("couldn't get transfer buffer mapping: {}", GETERR);
-      return false;
-    }
-    for (int i = 0; i < 6; ++i) {
-      const auto& img = imgs[i];
-      SDL_memcpy(textureTransferPtr + (imgSz * i), img->pixels, imgSz);
-      SDL_DestroySurface(img); // don't need this anymore
-    }
-    SDL_UnmapGPUTransferBuffer(device_, trBuf);
-  }
-
-  { // Create cubemap with right dimensions now that we got image size
-    SDL_GPUTextureCreateInfo cubeMapInfo{};
-    {
-      cubeMapInfo.type = SDL_GPU_TEXTURETYPE_CUBE;
-      cubeMapInfo.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
-      cubeMapInfo.width = imgW;
-      cubeMapInfo.height = imgH;
-      cubeMapInfo.layer_count_or_depth = 6;
-      cubeMapInfo.num_levels = 1;
-      cubeMapInfo.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER;
-    };
-    Cubemap = SDL_CreateGPUTexture(device_, &cubeMapInfo);
-    if (!Cubemap) {
-      LOG_ERROR("couldn't create cubemap texture: {}", GETERR);
-      SDL_ReleaseGPUTransferBuffer(device_, trBuf);
-      return false;
-    }
-  }
-
-  { // Copy pass transfer buffer to GPU
-    SDL_GPUCommandBuffer* cmdbuf = SDL_AcquireGPUCommandBuffer(device_);
-    if (!cmdbuf) {
-      LOG_ERROR("couldn't get command buffer for copy pass: {}", GETERR);
-      SDL_ReleaseGPUTransferBuffer(device_, trBuf);
-      return false;
-    }
-
-    SDL_GPUCopyPass* copyPass = SDL_BeginGPUCopyPass(cmdbuf);
-
-    for (Uint32 i = 0; i < 6; i += 1) {
-      SDL_GPUTextureTransferInfo trInfo{};
-      {
-        trInfo.transfer_buffer = trBuf;
-        trInfo.offset = imgSz * i;
-      }
-      SDL_GPUTextureRegion texReg{};
-      {
-        texReg.texture = Cubemap;
-        texReg.layer = i;
-        texReg.w = imgW;
-        texReg.h = imgH;
-        texReg.d = 1;
-      };
-      SDL_UploadToGPUTexture(copyPass, &trInfo, &texReg, false);
-    }
-    SDL_EndGPUCopyPass(copyPass);
-    SDL_SubmitGPUCommandBuffer(cmdbuf);
-  }
-
-  SDL_ReleaseGPUTransferBuffer(device_, trBuf);
-  LOG_DEBUG("Loaded skybox textures");
-  return true;
-}
-
 void
 Skybox::Draw(SDL_GPURenderPass* pass) const
 {
-  static const SDL_GPUTextureSamplerBinding texBind{ Cubemap, CubemapSampler };
+  static const SDL_GPUTextureSamplerBinding texBind{ Cubemap->Texture,
+                                                     CubemapSampler };
   static const SDL_GPUBufferBinding vBufBind{ VertexBuffer, 0 };
   static const SDL_GPUBufferBinding iBufBind{ IndexBuffer, 0 };
 

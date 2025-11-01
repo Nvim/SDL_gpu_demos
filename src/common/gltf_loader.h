@@ -15,13 +15,6 @@
 #include <fastgltf/types.hpp>
 #include <glm/ext/matrix_float4x4.hpp>
 
-struct LoadedImage
-{
-  int w, h,
-    nrChannels; // NOTE: don't use! Channel count is always forced to 4
-  u8* data{ nullptr };
-};
-
 class GLTFLoader
 {
   friend class GLTFScene;

@@ -92,7 +92,6 @@ public:
 public:
 private:
   bool InitGui();
-  bool LoadShaders();
   bool CreateSceneRenderTargets();
   ImDrawData* DrawGui();
   void UpdateScene();
@@ -119,8 +118,6 @@ private:
   ScenePicker scene_picker_{ MODELS_DIR, default_scene_path_ };
   bool is_loading_scene{ false };
   std::future<UniquePtr<GLTFScene>> scene_future_;
-  const char* vertex_path_;
-  const char* fragment_path_;
   Stats stats_;
 
   // User controls:

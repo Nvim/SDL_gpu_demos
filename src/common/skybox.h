@@ -1,5 +1,7 @@
 #pragma once
 
+#include "common/cubemap.h"
+#include "common/types.h"
 #include "common/util.h"
 
 #include <SDL3/SDL_gpu.h>
@@ -21,8 +23,7 @@ public:
 public:
   const char* VertPath = "resources/shaders/compiled/skybox.vert.spv";
   const char* FragPath = "resources/shaders/compiled/skybox.frag.spv";
-  SDL_GPUTexture* faces[6]{};
-  SDL_GPUTexture* Cubemap{};
+  UniquePtr<Cubemap> Cubemap{};
   SDL_GPUSampler* CubemapSampler{};
   SDL_GPUBuffer* VertexBuffer{};
   SDL_GPUBuffer* IndexBuffer{};
@@ -32,15 +33,12 @@ private:
   bool Init();
   bool CreatePipeline();
   bool SendVertexData() const;
-  bool LoadTextures();
 
 private:
   const char* dir_{};
   SDL_GPUDevice* device_{}; // needed for dtor
   SDL_Window* window_{};    // needed swapchain format
   bool loaded_{ false };
-  const char* paths[6]{ "left.jpg",   "right.jpg", "top.jpg",
-                        "bottom.jpg", "back.jpg",  "front.jpg" };
 
   // Vertex data
   // clang-format off

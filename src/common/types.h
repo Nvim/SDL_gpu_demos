@@ -17,8 +17,22 @@ using f64 = double;
 template<typename T> //
 using UniquePtr = std::unique_ptr<T>;
 
+template<typename T, typename... U>
+UniquePtr<T>
+MakeUnique(U... args)
+{
+  return std::make_unique<T>(args...);
+}
+
 template<typename T> //
 using SharedPtr = std::shared_ptr<T>;
+
+template<typename T, typename... U>
+SharedPtr<T>
+MakeShared(U... args)
+{
+  return std::make_shared<T>(args...);
+}
 
 template<typename T>
 using WeakPtr = std::weak_ptr<T>;

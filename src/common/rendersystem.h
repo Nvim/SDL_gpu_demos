@@ -88,6 +88,6 @@ public:
             [[maybe_unused]] Camera* camera) const;
 
 private:
-  SDL_GPUDevice* device_;
-  SDL_Window* window_;
+  [[maybe_unused]] SDL_GPUDevice* device_;
+  [[maybe_unused]] SDL_Window* window_;
 };

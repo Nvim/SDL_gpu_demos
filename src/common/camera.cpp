@@ -53,22 +53,19 @@ Camera::handle_input(f32 delta)
 
   // Movement
   if (state[SDL_SCANCODE_W]) {
-    // Position += (lookat_ * speed);
-    velocity.z = -1;
+    velocity.z = -speed;
     Moved = true;
   }
   if (state[SDL_SCANCODE_S]) {
-    // Position -= (lookat_ * speed);
-    velocity.z = 1;
+    velocity.z = speed;
     Moved = true;
   }
   if (state[SDL_SCANCODE_A]) {
-    velocity.x = -1;
+    velocity.x = -speed;
     Moved = true;
   }
   if (state[SDL_SCANCODE_D]) {
-    // Position += (right_ * speed);
-    velocity.x = 1;
+    velocity.x = speed;
     Moved = true;
   }
 

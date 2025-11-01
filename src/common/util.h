@@ -95,22 +95,15 @@ LoadShader(const char* path,
            Uint32 storageBufferCount,
            Uint32 storageTextureCount);
 
+struct LoadedImage
+{
+  int w, h,
+    nrChannels; // NOTE: don't use! Channel count is always forced to 4
+  u8* data{ nullptr };
+};
+
 SDL_Surface*
 LoadImage(const char* path);
-
-template<typename T, typename... U>
-SharedPtr<T>
-MakeShared(U... args)
-{
-  return std::make_shared<T>(args...);
-}
-
-template<typename T, typename... U>
-UniquePtr<T>
-MakeUnique(U... args)
-{
-  return std::make_unique<T>(args...);
-}
 
 // Casts F to T. Expects T to be an integer type, and F some enum value
 template<typename T, typename F>

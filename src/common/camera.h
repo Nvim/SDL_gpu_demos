@@ -39,7 +39,7 @@ private:
   // glm::vec3 up_{ 0.0f, -1.0f, 0.0f };
   // glm::vec3 right_{ 1.0f, 0.0f, 0.0f };
   // TODO: storing these for GUI config
-  float fov_;
+  [[maybe_unused]] float fov_;
   [[maybe_unused]] float aspect_;
   [[maybe_unused]] float near_;
   [[maybe_unused]] float far_;

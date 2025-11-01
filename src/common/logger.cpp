@@ -10,7 +10,7 @@ Logger::Init()
 {
   logger_ = spdlog::stdout_color_mt("LOG");
   logger_->set_level(spdlog::level::trace);
-  logger_->set_pattern("[%H:%M:%S:%e][%^%l%$]: %v");
+  logger_->set_pattern("[%H:%M:%S:%e][%^%-5l%$]: %v");
 }
 
 spdlog::logger&

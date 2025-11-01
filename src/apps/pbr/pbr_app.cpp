@@ -19,10 +19,10 @@ CubeProgram::CubeProgram(SDL_GPUDevice* device,
                          int w,
                          int h)
   : Program{ device, window }
-  , vertex_path_{ vertex_path }
-  , fragment_path_{ fragment_path }
   , vp_width_{ w }
   , vp_height_{ h }
+  , vertex_path_{ vertex_path }
+  , fragment_path_{ fragment_path }
 {
   {
     scene_color_target_info_.clear_color = { 0.1f, 0.1f, 0.1f, 1.0f };
@@ -316,13 +316,6 @@ CubeProgram::ChangeScene()
     // return ret;
     // return std::unique_ptr<GLTFScene>(nullptr);
   });
-}
-
-bool
-CubeProgram::LoadShaders()
-{
-  LOG_TRACE("CubeProgram::LoadShaders");
-  return true;
 }
 
 bool
