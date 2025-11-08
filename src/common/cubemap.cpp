@@ -1,4 +1,5 @@
 #include "cubemap.h"
+#include "common/loaded_image.h"
 #include "common/logger.h"
 #include "common/types.h"
 
@@ -34,17 +35,8 @@ MultifileCubemapLoader::Load(std::filesystem::path dir,
 
   { // Load all faces in memory
     for (u8 i = 0; i < 6; ++i) {
-      auto& img = imgs[i];
-      img.data = stbi_load(std::format("{}/{}", dir.c_str(), paths_[i]).c_str(),
-                           &img.w,
-                           &img.h,
-                           &img.nrChannels,
-                           4);
-      if (!img.data) {
-        LOG_ERROR("couldn't load skybox texture #{}: {}", i, GETERR);
-        for (int j = 0; j < i; ++j) {
-          stbi_image_free(imgs[j].data);
-        }
+      if (!ImageLoader::Load(imgs[i], dir / paths_[i])) {
+        LOG_ERROR("couldn't load cubemap texture #{}: {}", i, GETERR);
         return nullptr;
       }
       // assert(img.nrChannels == 4);
@@ -62,7 +54,6 @@ MultifileCubemapLoader::Load(std::filesystem::path dir,
   u32 width = imgs[0].w;
   u32 height = imgs[0].h;
   u32 imgSz = 4 * width * height;
-  auto freeImg = [](LoadedImage& i) { stbi_image_free(i.data); };
 
   SDL_GPUTransferBufferCreateInfo info{};
   {
@@ -72,7 +63,6 @@ MultifileCubemapLoader::Load(std::filesystem::path dir,
 
   SDL_GPUTransferBuffer* trBuf = SDL_CreateGPUTransferBuffer(device_, &info);
   if (!trBuf) {
-    std::for_each(imgs.begin(), imgs.end(), freeImg);
     LOG_ERROR("couldn't create GPU transfer buffer: {}", GETERR);
     return nullptr;
   }
@@ -81,7 +71,6 @@ MultifileCubemapLoader::Load(std::filesystem::path dir,
     u8* textureTransferPtr =
       (u8*)SDL_MapGPUTransferBuffer(device_, trBuf, false);
     if (!textureTransferPtr) {
-      std::for_each(imgs.begin(), imgs.end(), freeImg);
       SDL_ReleaseGPUTransferBuffer(device_, trBuf);
       LOG_ERROR("couldn't get transfer buffer mapping: {}", GETERR);
       return nullptr;
@@ -89,7 +78,6 @@ MultifileCubemapLoader::Load(std::filesystem::path dir,
     for (int i = 0; i < 6; ++i) {
       const auto& img = imgs[i];
       SDL_memcpy(textureTransferPtr + (imgSz * i), img.data, imgSz);
-      stbi_image_free(img.data); // don't need this anymore
     }
     SDL_UnmapGPUTransferBuffer(device_, trBuf);
   }

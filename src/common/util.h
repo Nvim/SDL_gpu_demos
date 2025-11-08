@@ -95,13 +95,6 @@ LoadShader(const char* path,
            Uint32 storageBufferCount,
            Uint32 storageTextureCount);
 
-struct LoadedImage
-{
-  int w, h,
-    nrChannels; // NOTE: don't use! Channel count is always forced to 4
-  u8* data{ nullptr };
-};
-
 SDL_Surface*
 LoadImage(const char* path);
 

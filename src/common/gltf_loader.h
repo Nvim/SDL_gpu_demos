@@ -4,6 +4,7 @@
 
 #include "common/gltf_material.h"
 #include "common/gltf_scene.h"
+#include "common/loaded_image.h"
 #include "common/logger.h"
 #include "common/program.h"
 #include "common/rendersystem.h"

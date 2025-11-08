@@ -15,6 +15,10 @@ enum class UBOBindingType
 };
 
 // UBO on Fragment shader side
+// TODO: normal scale, occlusion, emissive factor, alpha cutoff
+// use vec4s:
+// ve4 MetalRoughNormalOcclusion;
+// vec4 EmissiveAlpha;
 struct MaterialDataBinding
 {
   glm::vec4 color_factors; // 0-15

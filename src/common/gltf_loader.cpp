@@ -2,6 +2,8 @@
 
 #include "common/gltf_loader.h"
 
+#include "common/loaded_image.h"
+#include "common/logger.h"
 #include "common/material.h"
 #include "common/rendersystem.h"
 #include "common/tangent_loader.h"
@@ -19,10 +21,6 @@
 #include <glm/ext/quaternion_common.hpp>
 #include <glm/ext/quaternion_float.hpp>
 #include <glm/gtx/quaternion.hpp>
-#ifndef STB_IMAGE_IMPLEMENTATION
-#define STB_IMAGE_IMPLEMENTATION
-#endif
-#include <stb/stb_image.h>
 
 namespace {
 SDL_GPUFilter
@@ -433,7 +431,7 @@ GLTFLoader::LoadTexture(GLTFScene* ret, u64 texture_index, bool srgb)
     if (imgData.data) {
       LOG_DEBUG("Creating texture");
       tex = CreateAndUploadTexture(imgData, srgb);
-      stbi_image_free(imgData.data);
+      // stbi_image_free(imgData.data);
     }
     if (!tex) {
       LOG_WARN("Falling back to default textue");
@@ -445,81 +443,6 @@ GLTFLoader::LoadTexture(GLTFScene* ret, u64 texture_index, bool srgb)
   return true;
 }
 
-// bool
-// GLTFLoader::LoadImageData(GLTFScene* ret)
-// {
-//   LOG_TRACE("GLTFLoader::LoadImageData");
-//
-//   ret->textures_ = std::vector<SDL_GPUTexture*>{};
-//   ret->textures_.reserve(asset_.textures.size());
-//
-//   if (asset_.images.empty()) {
-//     LOG_WARN("LoadImageData: GLTF has no images");
-//     ret->textures_.push_back(default_texture_);
-//     return true;
-//   }
-//
-//   for (auto& image : asset_.images) {
-//     LoadedImage imgData{};
-//     { // load image data to CPU
-//       std::visit(fastgltf::visitor{
-//                    // clang-format off
-//         []([[maybe_unused]] auto& arg) {LOG_WARN("No URI source");},
-//         [&](fastgltf::sources::URI& filePath) {
-//           LOG_DEBUG("Loading image from URI");
-//           LoadImageFromURI(imgData, ret->Path.parent_path(), filePath);
-//         },
-//         [&](fastgltf::sources::Vector& vec) {
-//           LOG_DEBUG("Loading image from Vector");
-//           LoadImageFromVector(imgData,vec);
-//         },
-//         [&](fastgltf::sources::BufferView& view) {
-//           const auto& bufferView = asset_.bufferViews[view.bufferViewIndex];
-//           const auto& buffer = asset_.buffers[bufferView.bufferIndex];
-//
-//           LoadImageFromBufferView(imgData, bufferView, buffer);
-//         }
-//       }, image.data);
-//       // clang-format on
-//     }
-//
-//     { // create GPU texture TODO: need to be done in material loading for
-//       // rgb/srgb
-//       SDL_GPUTexture* tex{ nullptr };
-//       if (imgData.data) {
-//         LOG_DEBUG("Creating texture");
-//         tex = CreateAndUploadTexture(imgData);
-//         stbi_image_free(imgData.data);
-//       }
-//       if (!tex) {
-//         LOG_WARN("Falling back to default textue");
-//         tex = default_texture_;
-//       }
-//       ret->textures_.push_back(tex);
-//     }
-//   }
-//
-//   // random asserts to delete
-//   for (const auto& tex : asset_.textures) {
-//     if (!tex.imageIndex.has_value()) {
-//       LOG_WARN("Texture doesn't have image.");
-//       if (tex.basisuImageIndex.has_value()) {
-//         LOG_WARN("It has a baseiu");
-//       }
-//       if (tex.ddsImageIndex.has_value()) {
-//         LOG_WARN("It has a dds");
-//       }
-//       if (tex.webpImageIndex.has_value()) {
-//         LOG_WARN("It has a webp");
-//       }
-//     }
-//   }
-
-// LOG_DEBUG("{} textures were created", ret->textures_.size());
-// assert(ret->textures_.size() == asset_.images.size());
-// return !ret->textures_.empty();
-// }
-
 void
 GLTFLoader::LoadImageFromURI(LoadedImage& img,
                              std::filesystem::path parent_path,
@@ -529,18 +452,15 @@ GLTFLoader::LoadImageFromURI(LoadedImage& img,
   assert(URI.fileByteOffset == 0);
   assert(URI.uri.isLocalPath());
 
-  const auto p = URI.uri.path();
-  const std::string localPath(p.begin(), p.end());
+  const auto p = URI.uri.fspath();
 
-  // NOTE: Setting req_comp to 4 will force padding of missing alpha in case of
-  // 3 channels. Forced it to 4 because there's no SDL equivalent to
-  // VK_FORMAT_R8G8B8_UNORM as support is meh accross drivers it seems.
-  img.data =
-    stbi_load(std::format("{}/{}", parent_path.c_str(), localPath).c_str(),
-              &img.w,
-              &img.h,
-              &img.nrChannels,
-              4);
+  bool loaded = ImageLoader::Load(img,
+                                  parent_path / p,
+                                  ImageType::DIMENSIONS_2D,
+                                  ImagePixelFormat::PIXELFORMAT_UINT);
+  if (!loaded) {
+    LOG_WARN("Couldn't load image {}", p.c_str())
+  }
 }
 
 void
@@ -549,12 +469,14 @@ GLTFLoader::LoadImageFromVector(LoadedImage& img,
 {
   LOG_TRACE("GLTFLoader::LoadImageFromVector");
 
-  img.data = stbi_load_from_memory((stbi_uc*)vector.bytes.data(),
-                                   static_cast<int>(vector.bytes.size()),
-                                   &img.w,
-                                   &img.h,
-                                   &img.nrChannels,
-                                   4);
+  bool loaded = ImageLoader::Load(img,
+                                  (u8*)vector.bytes.data(),
+                                  vector.bytes.size(),
+                                  ImageType::DIMENSIONS_2D,
+                                  ImagePixelFormat::PIXELFORMAT_UINT);
+  if (!loaded) {
+    LOG_WARN("Couldn't load image from vector")
+  }
 }
 
 void
@@ -570,15 +492,15 @@ GLTFLoader::LoadImageFromBufferView(LoadedImage& img,
   }
 
   auto& vector = std::get<fastgltf::sources::Array>(buffer.data);
-  img.data =
-    stbi_load_from_memory((stbi_uc*)(vector.bytes.data() + view.byteOffset),
-                          static_cast<int>(view.byteLength),
-                          &img.w,
-                          &img.h,
-                          &img.nrChannels,
-                          4);
-  if (img.data == nullptr) {
-    LOG_ERROR("stb failed");
+  u8* data = (u8*)(vector.bytes.data() + view.byteOffset);
+
+  bool loaded = ImageLoader::Load(img,
+                                  data,
+                                  view.byteLength,
+                                  ImageType::DIMENSIONS_2D,
+                                  ImagePixelFormat::PIXELFORMAT_UINT);
+  if (!loaded) {
+    LOG_WARN("Couldn't load image from array")
   }
 }
 
