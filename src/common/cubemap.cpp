@@ -330,12 +330,12 @@ ProjectionCubemapLoader::Load(std::filesystem::path path,
     SDL_GPUTextureCreateInfo tex_info{};
     {
       tex_info.type = SDL_GPU_TEXTURETYPE_2D;
-      tex_info.format = tex_format,
-      tex_info.height = img.h;
+      tex_info.format = tex_format, tex_info.height = img.h;
       tex_info.width = img.w;
       tex_info.layer_count_or_depth = 1;
       tex_info.num_levels = 1;
-      tex_info.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER | SDL_GPU_TEXTUREUSAGE_COLOR_TARGET;
+      tex_info.usage =
+        SDL_GPU_TEXTUREUSAGE_SAMPLER | SDL_GPU_TEXTUREUSAGE_COLOR_TARGET;
       tex_info.sample_count = SDL_GPU_SAMPLECOUNT_1;
     }
     tex = SDL_CreateGPUTexture(device_, &tex_info);
@@ -478,7 +478,7 @@ ProjectionCubemapLoader::Load(std::filesystem::path path,
       SDL_BindGPUFragmentSamplers(pass, 0, &sampler_bind, 1);
 
       uniform[1] = mat_views[i];
-      SDL_PushGPUVertexUniformData(cmdbuf, 0, &uniform, 2*sizeof(glm::mat4));
+      SDL_PushGPUVertexUniformData(cmdbuf, 0, &uniform, 2 * sizeof(glm::mat4));
       SDL_DrawGPUIndexedPrimitives(pass, UnitCube::IndexCount, 1, 0, 0, 0);
 
       SDL_EndGPURenderPass(pass);

@@ -95,7 +95,6 @@ LoadShader(const char* path,
            Uint32 storageBufferCount,
            Uint32 storageTextureCount);
 
-
 // Casts F to T. Expects T to be an integer type, and F some enum value
 template<typename T, typename F>
   requires std::is_integral_v<T> && std::is_enum_v<F>
