@@ -95,8 +95,6 @@ LoadShader(const char* path,
            Uint32 storageBufferCount,
            Uint32 storageTextureCount);
 
-SDL_Surface*
-LoadImage(const char* path);
 
 // Casts F to T. Expects T to be an integer type, and F some enum value
 template<typename T, typename F>

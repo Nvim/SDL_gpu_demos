@@ -15,10 +15,19 @@ LoadedImage::~LoadedImage()
 u8
 LoadedImage::BytesPerPixel()
 {
+  // Always assume 4 channels
   if (pixel_format == ImagePixelFormat::PIXELFORMAT_UINT) {
-    return 1 * nrChannels;
+    // return 1 * nrChannels;
+    return 4 * 4;
   }
-  return 4 * nrChannels;
+  // return 4 * nrChannels;
+  return 4 * 4;
+}
+
+u64
+LoadedImage::DataSize()
+{
+  return BytesPerPixel() * w * h;
 }
 
 bool

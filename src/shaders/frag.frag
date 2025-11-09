@@ -95,6 +95,9 @@ void main()
         normal = texture(TexNormal, inUv).rgb;
         normal = normal * 2.0 - 1.0; // [0, 1] -> [-1, 1]
         normal = normalize(inTBN * normal);
+        if (!gl_FrontFacing) {
+            normal *= -1.0f;
+        }
     }
     if (bool(mat.feature_flags & HAS_EMISSIVE_TEX)) {
         // TODO: factor

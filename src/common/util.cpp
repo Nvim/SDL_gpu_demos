@@ -1,7 +1,5 @@
 #include <pch.h>
 
-#include <SDL3_image/SDL_image.h>
-
 SDL_GPUShader*
 LoadShader(const char* path,
            SDL_GPUDevice* device,
@@ -49,26 +47,4 @@ LoadShader(const char* path,
   LOG_DEBUG("Created shader from path: {}", path);
   SDL_free(code);
   return shader;
-}
-
-SDL_Surface*
-LoadImage(const char* path)
-{
-  SDL_Surface* result;
-  SDL_PixelFormat format;
-
-  result = IMG_Load(path);
-  if (result == NULL) {
-    return NULL;
-  }
-
-  format = SDL_PIXELFORMAT_ABGR8888;
-  if (result->format != format) {
-    SDL_Surface* next = SDL_ConvertSurface(result, format);
-    SDL_DestroySurface(result);
-    result = next;
-  }
-
-  LOG_DEBUG("Created surface from image: {}", path);
-  return result;
 }

@@ -13,3 +13,6 @@
 [submodule "thirdparty/ktx"]
 	path = thirdparty/ktx
 	url = https://github.com/KhronosGroup/KTX-Software
+[submodule "thirdparty/SDL"]
+	path = thirdparty/SDL
+	url = https://github.com/libsdl-org/SDL

@@ -10,8 +10,7 @@ target_include_directories(cxx_setup INTERFACE "${PROJECT_SOURCE_DIR}/src")
 target_compile_options(cxx_setup INTERFACE -Wall -Wpedantic -Wextra)
 
 # Expected installed libs
-find_package(SDL3 REQUIRED)
-find_package(SDL3_image REQUIRED)
+# find_package(SDL3 REQUIRED)
 find_package(glm REQUIRED)
 find_package(simdjson REQUIRED)
 
@@ -26,7 +25,6 @@ target_include_directories(${PROJECT_NAME} PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/t
 target_compile_definitions(${PROJECT_NAME} PUBLIC GLM_FORCE_DEPTH_ZERO_TO_ONE)
 
 target_link_libraries(${PROJECT_NAME} PUBLIC
-  SDL3_image::SDL3_image 
   SDL3::SDL3
   glm::glm 
   imgui

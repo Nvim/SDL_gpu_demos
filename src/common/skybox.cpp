@@ -1,6 +1,7 @@
 #include <pch.h>
 
 #include "common/cubemap.h"
+#include "common/unit_cube.h"
 #include "skybox.h"
 
 Skybox::Skybox(const std::filesystem::path path,
@@ -53,6 +54,9 @@ Skybox::Init()
   if (std::filesystem::is_directory(path_)) {
     loader = new MultifileCubemapLoader{ device_ };
     FragPath = SDR_FRAGMENT_SHADER;
+  } else if (path_.extension().compare(".hdr") == 0) {
+    loader = new ProjectionCubemapLoader{ device_ };
+    FragPath = HDR_FRAGMENT_SHADER;
   } else {
     loader = new KtxCubemapLoader{ device_ };
     FragPath = HDR_FRAGMENT_SHADER;
@@ -198,8 +202,8 @@ Skybox::SendVertexData() const
       (PosVertex*)SDL_MapGPUTransferBuffer(device_, trBuf, false);
     Uint16* indexData = (Uint16*)&transferData[24];
 
-    SDL_memcpy(transferData, verts_uvs, sizeof(verts_uvs));
-    SDL_memcpy(indexData, indices, sizeof(indices));
+    SDL_memcpy(transferData, UnitCube::Verts, sizeof(UnitCube::Verts));
+    SDL_memcpy(indexData, UnitCube::Indices, sizeof(UnitCube::Indices));
     SDL_UnmapGPUTransferBuffer(device_, trBuf);
   }
 

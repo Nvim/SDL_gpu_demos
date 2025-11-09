@@ -2,7 +2,9 @@
 #include "common/loaded_image.h"
 #include "common/logger.h"
 #include "common/types.h"
+#include "common/unit_cube.h"
 
+#include <SDL3/SDL_gpu.h>
 #include <pch.h>
 
 #include <ktx.h>
@@ -17,11 +19,6 @@ Cubemap::~Cubemap()
 }
 
 MultifileCubemapLoader::MultifileCubemapLoader(SDL_GPUDevice* device)
-  : device_{ device }
-{
-}
-
-KtxCubemapLoader::KtxCubemapLoader(SDL_GPUDevice* device)
   : device_{ device }
 {
 }
@@ -112,7 +109,7 @@ MultifileCubemapLoader::Load(std::filesystem::path dir,
 
     SDL_GPUCopyPass* copyPass = SDL_BeginGPUCopyPass(cmdbuf);
 
-    for (Uint32 i = 0; i < 6; i += 1) {
+    for (u32 i = 0; i < 6; i += 1) {
       SDL_GPUTextureTransferInfo trInfo{};
       {
         trInfo.transfer_buffer = trBuf;
@@ -136,6 +133,11 @@ MultifileCubemapLoader::Load(std::filesystem::path dir,
   LOG_DEBUG("Loaded cubemap `{}` textures", dir.c_str());
 
   return ret;
+}
+
+KtxCubemapLoader::KtxCubemapLoader(SDL_GPUDevice* device)
+  : device_{ device }
+{
 }
 
 UniquePtr<Cubemap>
@@ -281,4 +283,372 @@ KtxCubemapLoader::Load(std::filesystem::path path, CubeMapUsage usage) const
   LOG_DEBUG("Loaded cubemap `{}` KTX texture", path.c_str());
 
   return ret;
+}
+
+ProjectionCubemapLoader::ProjectionCubemapLoader(SDL_GPUDevice* device)
+  : device_{ device }
+{
+  if (!CreatePipeline()) {
+    LOG_ERROR("Couldn't create pipeline");
+    return;
+  }
+
+  if (!UploadVertexData()) {
+    LOG_ERROR("Couldn't send vertex data");
+    return;
+  }
+
+  init_ = true;
+}
+
+UniquePtr<Cubemap>
+ProjectionCubemapLoader::Load(std::filesystem::path path,
+                              CubeMapUsage usage) const
+{
+  LOG_TRACE("ProjectionCubeMapLoader::Load");
+
+  if (!init_) {
+    LOG_ERROR("ProjectionCubemapLoader isn't initialized");
+    return nullptr;
+  }
+
+  if (usage != CubeMapUsage::Skybox) {
+    LOG_ERROR("HDR equirectangular maps are only supported for skyboxes");
+    return nullptr;
+  }
+
+  LoadedImage img{};
+  constexpr auto tex_format = SDL_GPU_TEXTUREFORMAT_R32G32B32A32_FLOAT;
+  SDL_GPUTexture* tex{ nullptr };
+  { // Load texture data to cpu and create texture
+    auto type = ImageType::DIMENSIONS_2D;
+    auto f = ImagePixelFormat::PIXELFORMAT_FLOAT;
+    if (!ImageLoader::Load(img, path, type, f)) {
+      LOG_ERROR("couldn't load cubemap image {}", path.c_str());
+      return nullptr;
+    }
+    SDL_GPUTextureCreateInfo tex_info{};
+    {
+      tex_info.type = SDL_GPU_TEXTURETYPE_2D;
+      tex_info.format = tex_format,
+      tex_info.height = img.h;
+      tex_info.width = img.w;
+      tex_info.layer_count_or_depth = 1;
+      tex_info.num_levels = 1;
+      tex_info.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER | SDL_GPU_TEXTUREUSAGE_COLOR_TARGET;
+      tex_info.sample_count = SDL_GPU_SAMPLECOUNT_1;
+    }
+    tex = SDL_CreateGPUTexture(device_, &tex_info);
+    if (!tex) {
+      LOG_ERROR("Couldn't create texture: {}", GETERR);
+      return nullptr;
+    }
+  }
+
+  SDL_GPUSampler* tex_sampler{};
+  {
+    SDL_GPUSamplerCreateInfo samplerInfo{};
+    {
+      samplerInfo.min_filter = SDL_GPU_FILTER_LINEAR;
+      samplerInfo.mag_filter = SDL_GPU_FILTER_LINEAR;
+      samplerInfo.mipmap_mode = SDL_GPU_SAMPLERMIPMAPMODE_NEAREST;
+      samplerInfo.address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
+      samplerInfo.address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
+    }
+    tex_sampler = SDL_CreateGPUSampler(device_, &samplerInfo);
+    if (!tex_sampler) {
+      LOG_ERROR("Couldn't create sampler, {}", GETERR);
+      return nullptr;
+    }
+  }
+
+  SDL_GPUTransferBuffer* trBuf;
+  { // Memcpy data from cpu -> transfer buffer
+    SDL_GPUTransferBufferCreateInfo info{};
+    {
+      info.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
+      info.size = img.DataSize();
+    };
+    trBuf = SDL_CreateGPUTransferBuffer(device_, &info);
+    if (!trBuf) {
+      SDL_ReleaseGPUTexture(device_, tex);
+      LOG_ERROR("couldn't create GPU transfer buffer: {}", GETERR);
+      return nullptr;
+    }
+    u8* mapped = (u8*)SDL_MapGPUTransferBuffer(device_, trBuf, false);
+    if (!mapped) {
+      SDL_ReleaseGPUTexture(device_, tex);
+      SDL_ReleaseGPUTransferBuffer(device_, trBuf);
+      LOG_ERROR("couldn't get transfer buffer mapping: {}", GETERR);
+      return nullptr;
+    }
+    SDL_memcpy(mapped, img.data, img.DataSize());
+    SDL_UnmapGPUTransferBuffer(device_, trBuf);
+  }
+
+  SDL_GPUCommandBuffer* cmdbuf = SDL_AcquireGPUCommandBuffer(device_);
+  if (cmdbuf == NULL) {
+    LOG_ERROR("Couldn't acquire command buffer: {}", GETERR);
+    return nullptr;
+  }
+
+  { // Copy pass transfer buffer -> GPU texture
+    SDL_GPUTextureTransferInfo tex_transfer_info{};
+    {
+      tex_transfer_info.transfer_buffer = trBuf;
+      tex_transfer_info.offset = 0;
+    }
+    SDL_GPUTextureRegion tex_reg{};
+    {
+      tex_reg.texture = tex;
+      tex_reg.w = img.w;
+      tex_reg.h = img.h;
+      tex_reg.d = 1;
+    }
+    SDL_GPUCopyPass* copyPass = SDL_BeginGPUCopyPass(cmdbuf);
+    SDL_UploadToGPUTexture(copyPass, &tex_transfer_info, &tex_reg, false);
+
+    SDL_EndGPUCopyPass(copyPass);
+  }
+  SDL_ReleaseGPUTransferBuffer(device_, trBuf);
+
+  constexpr u32 width = 512, height = 512;
+  auto ret = MakeUnique<Cubemap>();
+  {
+    ret->Path = path;
+    ret->Usage = usage;
+    ret->Format = tex_format;
+    ret->device_ = device_;
+  }
+
+  { // Create cubemap
+    SDL_GPUTextureCreateInfo cubeMapInfo{};
+    {
+      cubeMapInfo.type = SDL_GPU_TEXTURETYPE_CUBE;
+      cubeMapInfo.format = tex_format;
+      cubeMapInfo.width = width;
+      cubeMapInfo.height = height;
+      cubeMapInfo.layer_count_or_depth = 6;
+      cubeMapInfo.num_levels = 1;
+      cubeMapInfo.usage =
+        SDL_GPU_TEXTUREUSAGE_SAMPLER | SDL_GPU_TEXTUREUSAGE_COLOR_TARGET;
+    };
+    ret->Texture = SDL_CreateGPUTexture(device_, &cubeMapInfo);
+    if (!ret->Texture) {
+      LOG_ERROR("Couldn't create cubemap texture: {}", GETERR);
+      return nullptr;
+    }
+  }
+
+  { // Draw unit cube & output to each face
+    SDL_GPUColorTargetInfo target_info;
+    {
+      target_info.clear_color = { 0.8f, 0.1f, 0.8f, 1.0f };
+      target_info.load_op = SDL_GPU_LOADOP_CLEAR;
+      target_info.store_op = SDL_GPU_STOREOP_STORE;
+      target_info.resolve_texture = nullptr;
+      // target_info.resolve_layer = 0;
+    }
+    static const SDL_GPUViewport viewport{ 0, 0, 512.f, 512.f, .1f, 1.f };
+    const SDL_GPUBufferBinding vert_bind{ VertexBuffer, 0 };
+    const SDL_GPUBufferBinding idx_bind{ IndexBuffer, 0 };
+    const SDL_GPUTextureSamplerBinding sampler_bind{ tex, tex_sampler };
+    static const glm::mat4 mat_proj =
+      glm::perspective(glm::radians(90.0f), 1.0f, 0.1f, 10.0f);
+    static const glm::mat4 mat_views[] = {
+      glm::lookAt(glm::vec3{ 0.f }, { 1.f, 0.f, 0.f }, { 0.f, -1.f, 0.f }),
+      glm::lookAt(glm::vec3{ 0.f }, { -1.f, 0.f, 0.f }, { 0.f, -1.f, 0.f }),
+      glm::lookAt(glm::vec3{ 0.f }, { 0.f, -1.f, 0.f }, { 0.f, 0.f, -1.f }),
+      glm::lookAt(glm::vec3{ 0.f }, { 0.f, 1.f, 0.f }, { 0.f, 0.f, 1.f }),
+      glm::lookAt(glm::vec3{ 0.f }, { 0.f, 0.f, 1.f }, { 0.f, -1.f, 0.f }),
+      glm::lookAt(glm::vec3{ 0.f }, { 0.f, 0.f, -1.f }, { 0.f, -1.f, 0.f })
+    };
+    glm::mat4 uniform[2] = { mat_proj, mat_views[0] };
+
+    for (u8 i = 0; i < 6; i++) {
+      target_info.texture = ret->Texture;
+      target_info.layer_or_depth_plane = i;
+      SDL_GPURenderPass* pass =
+        SDL_BeginGPURenderPass(cmdbuf, &target_info, 1, nullptr);
+
+      SDL_SetGPUViewport(pass, &viewport);
+      SDL_BindGPUGraphicsPipeline(pass, Pipeline);
+      SDL_BindGPUVertexBuffers(pass, 0, &vert_bind, 1);
+      SDL_BindGPUIndexBuffer(pass, &idx_bind, SDL_GPU_INDEXELEMENTSIZE_16BIT);
+      SDL_BindGPUFragmentSamplers(pass, 0, &sampler_bind, 1);
+
+      uniform[1] = mat_views[i];
+      SDL_PushGPUVertexUniformData(cmdbuf, 0, &uniform, 2*sizeof(glm::mat4));
+      SDL_DrawGPUIndexedPrimitives(pass, UnitCube::IndexCount, 1, 0, 0, 0);
+
+      SDL_EndGPURenderPass(pass);
+    }
+  }
+
+  auto b = SDL_SubmitGPUCommandBuffer(cmdbuf);
+  if (!b) {
+    LOG_ERROR("Couldn't submit command buffer: {}", GETERR);
+  } else {
+    LOG_DEBUG("Loaded HDR texture `{}` as cubemap", path.c_str());
+  }
+
+  SDL_ReleaseGPUTexture(device_, tex);
+  return ret;
+}
+
+bool
+ProjectionCubemapLoader::CreatePipeline()
+{
+  LOG_TRACE("ProjectionCubemapLoader::CreatePipeline");
+  auto vert = LoadShader(VertPath, device_, 0, 1, 0, 0);
+  if (vert == nullptr) {
+    LOG_ERROR("Couldn't load vertex shader at path {}", VertPath);
+    return false;
+  }
+  auto frag = LoadShader(FragPath, device_, 1, 0, 0, 0);
+  if (frag == nullptr) {
+    LOG_ERROR("Couldn't load fragment shader at path {}", FragPath);
+    return false;
+  }
+
+  SDL_GPUColorTargetDescription col_desc = {};
+  // Assumes the image is hdr
+  col_desc.format = SDL_GPU_TEXTUREFORMAT_R32G32B32A32_FLOAT;
+
+  SDL_GPUVertexBufferDescription vert_desc{};
+  {
+    vert_desc.slot = 0;
+    vert_desc.input_rate = SDL_GPU_VERTEXINPUTRATE_VERTEX;
+    vert_desc.instance_step_rate = 0;
+    vert_desc.pitch = sizeof(PosVertex);
+  }
+
+  SDL_GPUVertexAttribute vert_attr{};
+  {
+    vert_attr.buffer_slot = 0;
+    vert_attr.format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3;
+    vert_attr.location = 0;
+    vert_attr.offset = 0;
+  }
+
+  SDL_GPUGraphicsPipelineCreateInfo pipelineCreateInfo = {};
+  {
+    pipelineCreateInfo.vertex_shader = vert;
+    pipelineCreateInfo.fragment_shader = frag;
+    pipelineCreateInfo.primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;
+    {
+      auto& state = pipelineCreateInfo.vertex_input_state;
+      state.vertex_buffer_descriptions = &vert_desc;
+      state.num_vertex_buffers = 1;
+      state.vertex_attributes = &vert_attr;
+      state.num_vertex_attributes = 1;
+    }
+    {
+      auto& state = pipelineCreateInfo.target_info;
+      state.color_target_descriptions = &col_desc;
+      state.num_color_targets = 1;
+      state.has_depth_stencil_target = false;
+    }
+    {
+      auto& state = pipelineCreateInfo.depth_stencil_state;
+      state.enable_depth_test = false;
+      state.enable_depth_write = false;
+      state.enable_stencil_test = false;
+    }
+  }
+  Pipeline = SDL_CreateGPUGraphicsPipeline(device_, &pipelineCreateInfo);
+
+  SDL_ReleaseGPUShader(device_, vert);
+  SDL_ReleaseGPUShader(device_, frag);
+
+  auto ret = Pipeline != nullptr;
+  if (ret) {
+    LOG_DEBUG("Created hdr cubemap pipeline");
+  } else {
+    LOG_ERROR("Couldn't create hdr cubemap pipeline: {}", GETERR);
+  }
+  return ret;
+}
+
+bool
+ProjectionCubemapLoader::UploadVertexData()
+{
+  LOG_TRACE("ProjectionCubemapLoader::UploadVertexData");
+
+  const u32 vbuf_sz = sizeof(PosVertex) * UnitCube::VertCount;
+  const u32 ibuf_sz = sizeof(u16) * UnitCube::IndexCount;
+  const u32 trbuf_sz = vbuf_sz + ibuf_sz;
+  SDL_GPUBufferCreateInfo bufInfo{};
+  {
+    bufInfo.usage = SDL_GPU_BUFFERUSAGE_VERTEX;
+    bufInfo.size = vbuf_sz;
+  }
+  VertexBuffer = SDL_CreateGPUBuffer(device_, &bufInfo);
+  if (!VertexBuffer) {
+    LOG_ERROR("Couldn't create vertex buffer: {}", GETERR);
+    return false;
+  }
+
+  {
+    bufInfo.usage = SDL_GPU_BUFFERUSAGE_INDEX;
+    bufInfo.size = ibuf_sz;
+  }
+  IndexBuffer = SDL_CreateGPUBuffer(device_, &bufInfo);
+  if (!VertexBuffer) {
+    LOG_ERROR("Couldn't create index buffer: {}", GETERR);
+    return false;
+  }
+
+  SDL_GPUTransferBufferCreateInfo trInfo{};
+  {
+    trInfo.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
+    trInfo.size = trbuf_sz;
+  }
+  SDL_GPUTransferBuffer* trBuf = SDL_CreateGPUTransferBuffer(device_, &trInfo);
+  if (!trBuf) {
+    LOG_ERROR("Couldn't create transfer buffer: {}", GETERR);
+    return false;
+  }
+
+  { // Transfer buffer
+    PosVertex* transferData =
+      (PosVertex*)SDL_MapGPUTransferBuffer(device_, trBuf, false);
+    u16* indexData = (u16*)&transferData[24];
+
+    SDL_memcpy(transferData, UnitCube::Verts, sizeof(UnitCube::Verts));
+    SDL_memcpy(indexData, UnitCube::Indices, sizeof(UnitCube::Indices));
+    SDL_UnmapGPUTransferBuffer(device_, trBuf);
+  }
+
+  SDL_GPUCommandBuffer* cmdbuf = SDL_AcquireGPUCommandBuffer(device_);
+
+  { // Copy pass
+    SDL_GPUCopyPass* copyPass = SDL_BeginGPUCopyPass(cmdbuf);
+
+    SDL_GPUTransferBufferLocation trLoc{ trBuf, 0 };
+    SDL_GPUBufferRegion vBufReg{ VertexBuffer, 0, vbuf_sz };
+    SDL_GPUBufferRegion iBufReg{ IndexBuffer, 0, ibuf_sz };
+
+    SDL_UploadToGPUBuffer(copyPass, &trLoc, &vBufReg, false);
+    trLoc.offset = vBufReg.size;
+    SDL_UploadToGPUBuffer(copyPass, &trLoc, &iBufReg, false);
+    SDL_EndGPUCopyPass(copyPass);
+  }
+
+  SDL_ReleaseGPUTransferBuffer(device_, trBuf);
+  auto ret = SDL_SubmitGPUCommandBuffer(cmdbuf);
+  if (ret) {
+    LOG_DEBUG("Sent cubemap vertex data to GPU");
+  } else {
+    LOG_ERROR("Couldn't submit command buffer for vertex transfer: {}", GETERR);
+  }
+  return ret;
+}
+
+bool
+ProjectionCubemapLoader::CreateSampler()
+{
+  LOG_TRACE("ProjectionCubemapLoader::CreateSampler");
+
+  return true;
 }

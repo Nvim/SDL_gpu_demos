@@ -26,6 +26,7 @@ struct LoadedImage
 
   ~LoadedImage();
 
+  u64 DataSize();
   u8 BytesPerPixel();
 };
 

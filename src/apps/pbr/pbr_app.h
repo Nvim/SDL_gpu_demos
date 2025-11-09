@@ -102,11 +102,11 @@ private:
                   vp_width_ / (f32)vp_height_,
                   .1f,
                   100.f };
-  Skybox skybox_{ "resources/textures/plains_sunset.ktx2", Window, Device };
+  Skybox skybox_{ "resources/textures/piazza_bologni_1k.hdr", Window, Device };
   GLTFLoader loader_{ this };
   std::filesystem::path default_scene_path_{
-    // MODELS_DIR / "DamagedHelmet/DamagedHelmetWithTangents.glb"
-    MODELS_DIR / "AlphaBlendModeTest.glb"
+    MODELS_DIR / "DamagedHelmet/DamagedHelmetWithTangents.glb"
+    // MODELS_DIR / "AlphaBlendModeTest.glb"
   };
   RenderContext render_context_{};
   std::vector<UniquePtr<GLTFScene>> scenes_{};

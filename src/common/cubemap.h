@@ -20,6 +20,7 @@ struct Cubemap
 
   friend class MultifileCubemapLoader;
   friend class KtxCubemapLoader;
+  friend class ProjectionCubemapLoader;
 
 private: // TODO: remove this in favor of RAII texture wrapper
   SDL_GPUDevice* device_{};
@@ -48,6 +49,7 @@ private:
                          "bottom.jpg", "back.jpg",  "front.jpg" };
 };
 
+// Ktx format allows retrieving each face individually
 class KtxCubemapLoader final : public ICubemapLoader
 {
 public:
@@ -57,5 +59,31 @@ public:
   ~KtxCubemapLoader() override = default;
 
 private:
+  SDL_GPUDevice* device_{};
+};
+
+// HDR flat equirectangular projection. Reconstructs faces
+class ProjectionCubemapLoader final : public ICubemapLoader
+{
+public:
+  explicit ProjectionCubemapLoader(SDL_GPUDevice* device);
+  UniquePtr<Cubemap> Load(std::filesystem::path path,
+                          CubeMapUsage usage) const override;
+  ~ProjectionCubemapLoader() override = default;
+
+private:
+  bool CreatePipeline();
+  bool UploadVertexData();
+  bool CreateSampler();
+
+private:
+  bool init_{ false };
+  static inline SDL_GPUBuffer* VertexBuffer{ nullptr };
+  static inline SDL_GPUBuffer* IndexBuffer{ nullptr };
+  static inline SDL_GPUGraphicsPipeline* Pipeline{ nullptr };
+  static constexpr const char* VertPath =
+    "resources/shaders/compiled/cubemap_projection.vert.spv";
+  static constexpr const char* FragPath =
+    "resources/shaders/compiled/cubemap_projection.frag.spv";
   SDL_GPUDevice* device_{};
 };
