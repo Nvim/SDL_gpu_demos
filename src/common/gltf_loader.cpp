@@ -932,7 +932,8 @@ GLTFLoader::CreatePipelines()
       LOG_ERROR("Backend doesn't support SPRIR-V");
       return false;
     }
-    auto samplers = GLTFPbrMaterial::TextureCount;
+    auto samplers =
+      GLTFPbrMaterial::TextureCount + 3; // brdf lut, irradiance & specular maps
     auto vertUbos = GLTFPbrMaterial::VertexUBOCount;
     auto fragUbos = GLTFPbrMaterial::FragmentUBOCount;
     vs = LoadShader(VertexShaderPath, Device, 0, vertUbos, 0, 0);

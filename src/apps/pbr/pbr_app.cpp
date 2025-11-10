@@ -3,6 +3,7 @@
 #include "pbr_app.h"
 
 #include "common/camera.h"
+#include "common/cubemap.h"
 #include "common/logger.h"
 #include "common/types.h"
 #include "common/util.h"
@@ -71,10 +72,9 @@ CubeProgram::~CubeProgram()
     it->get()->Release();
   }
 
-  RELEASE_IF(vertex_, SDL_ReleaseGPUShader);
-  RELEASE_IF(fragment_, SDL_ReleaseGPUShader);
   RELEASE_IF(depth_target_, SDL_ReleaseGPUTexture);
   RELEASE_IF(color_target_, SDL_ReleaseGPUTexture);
+  RELEASE_IF(brdf_lut_, SDL_ReleaseGPUTexture);
   loader_.Release();
 
   LOG_DEBUG("Released GPU Resources");
@@ -114,6 +114,12 @@ CubeProgram::Init()
     return false;
   }
   LOG_DEBUG("Created render target textures");
+
+  if (!LoadPbrTextures()) {
+    LOG_CRITICAL("Couldn't load pbr textures");
+    return false;
+  }
+  LOG_DEBUG("Loaded pbr textures");
 
   global_transform_.translation_ = { 0.f, 0.f, 0.0f };
   global_transform_.scale_ = { 1.f, 1.f, 1.f };
@@ -191,12 +197,14 @@ CubeProgram::UpdateScene()
 bool
 CubeProgram::Draw()
 {
-  if constexpr (sizeof(MaterialDataBinding) != 32) {
-    LOG_CRITICAL("size is {}", sizeof(MaterialDataBinding));
-    return false;
-  }
   static const SDL_GPUViewport scene_vp{
     0, 0, float(vp_width_), float(vp_height_), 0.1f, 1.0f
+  };
+
+  static const SDL_GPUTextureSamplerBinding pbr_sampler_binds[3]{
+    { brdf_lut_, pbr_samplers_[0] },
+    { irradiance_map_->Texture, pbr_samplers_[1] },
+    { specular_map_->Texture, pbr_samplers_[2] }
   };
 
   SDL_GPUCommandBuffer* cmdbuf = SDL_AcquireGPUCommandBuffer(Device);
@@ -264,6 +272,8 @@ CubeProgram::Draw()
       material->ubo.Bind(cmdbuf);
 
       material->BindSamplers(scenePass);
+      SDL_BindGPUFragmentSamplers(
+        scenePass, material->TextureCount, pbr_sampler_binds, 3);
       SDL_DrawGPUIndexedPrimitives(
         scenePass, draw.VertexCount, total_instances, draw.FirstIndex, 0, 0);
     };
@@ -463,4 +473,128 @@ CubeProgram::DrawGui()
 
   ImGui::Render();
   return ImGui::GetDrawData();
+}
+
+bool
+CubeProgram::LoadPbrTextures()
+{
+  KtxCubemapLoader loader(Device);
+  irradiance_map_ =
+    loader.Load(IRRADIANCE_MAP_PATH, CubeMapUsage::IrradianceMap);
+  if (irradiance_map_ == nullptr) {
+    LOG_ERROR("Couldn't load irradiance map");
+    return false;
+  }
+  specular_map_ = loader.Load(SPECULAR_MAP_PATH, CubeMapUsage::SpecularMap);
+  if (specular_map_ == nullptr) {
+    LOG_ERROR("Couldn't load specular map");
+    return false;
+  }
+
+  {
+    LoadedImage img{};
+    constexpr auto tex_format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM_SRGB;
+    { // Load texture data to cpu and create texture
+      auto type = ImageType::DIMENSIONS_2D;
+      auto f = ImagePixelFormat::PIXELFORMAT_UINT;
+      if (!ImageLoader::Load(img, BRDF_LUT_PATH, type, f)) {
+        LOG_ERROR("couldn't load brdf lut image");
+        return false;
+      }
+      SDL_GPUTextureCreateInfo tex_info{};
+      {
+        tex_info.type = SDL_GPU_TEXTURETYPE_2D;
+        tex_info.format = tex_format;
+        tex_info.height = img.h;
+        tex_info.width = img.w;
+        tex_info.layer_count_or_depth = 1;
+        tex_info.num_levels = 1;
+        tex_info.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER;
+        tex_info.sample_count = SDL_GPU_SAMPLECOUNT_1;
+        // tex_info.props = ;
+      }
+      brdf_lut_ = SDL_CreateGPUTexture(Device, &tex_info);
+      if (!brdf_lut_) {
+        LOG_ERROR("Couldn't create texture: {}", GETERR);
+        return false;
+      }
+      SDL_SetGPUTextureName(Device, brdf_lut_, "LUTLUTLUT");
+    }
+
+    SDL_GPUSampler* sampler{ nullptr };
+    {
+      SDL_GPUSamplerCreateInfo samplerInfo{};
+      {
+        samplerInfo.min_filter = SDL_GPU_FILTER_NEAREST;
+        samplerInfo.mag_filter = SDL_GPU_FILTER_NEAREST;
+        samplerInfo.mipmap_mode = SDL_GPU_SAMPLERMIPMAPMODE_NEAREST;
+        samplerInfo.address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
+        samplerInfo.address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
+      }
+      sampler = SDL_CreateGPUSampler(Device, &samplerInfo);
+      if (!sampler) {
+        LOG_ERROR("Couldn't create brdf LUT sampler, {}", GETERR);
+        return false;
+      }
+      for (u8 i = 0; i < 3; ++i) {
+        pbr_samplers_[i] = sampler;
+      }
+    }
+
+    SDL_GPUTransferBuffer* trBuf;
+    { // Memcpy data from cpu -> transfer buffer
+      SDL_GPUTransferBufferCreateInfo info{};
+      {
+        info.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
+        info.size = img.DataSize();
+      };
+      trBuf = SDL_CreateGPUTransferBuffer(Device, &info);
+      if (!trBuf) {
+        SDL_ReleaseGPUTexture(Device, brdf_lut_);
+        LOG_ERROR("couldn't create GPU transfer buffer: {}", GETERR);
+        return false;
+      }
+      u8* mapped = (u8*)SDL_MapGPUTransferBuffer(Device, trBuf, false);
+      if (!mapped) {
+        SDL_ReleaseGPUTexture(Device, brdf_lut_);
+        SDL_ReleaseGPUTransferBuffer(Device, trBuf);
+        LOG_ERROR("couldn't get transfer buffer mapping: {}", GETERR);
+        return false;
+      }
+      SDL_memcpy(mapped, img.data, img.DataSize());
+      SDL_UnmapGPUTransferBuffer(Device, trBuf);
+    }
+
+    SDL_GPUCommandBuffer* cmdbuf = SDL_AcquireGPUCommandBuffer(Device);
+    if (cmdbuf == NULL) {
+      LOG_ERROR("Couldn't acquire command buffer: {}", GETERR);
+      return false;
+    }
+
+    { // Copy pass transfer buffer -> GPU texture
+      SDL_GPUTextureTransferInfo tex_transfer_info{};
+      {
+        tex_transfer_info.transfer_buffer = trBuf;
+        tex_transfer_info.offset = 0;
+      }
+      SDL_GPUTextureRegion tex_reg{};
+      {
+        tex_reg.texture = brdf_lut_;
+        tex_reg.w = img.w;
+        tex_reg.h = img.h;
+        tex_reg.d = 1;
+      }
+      SDL_GPUCopyPass* copyPass = SDL_BeginGPUCopyPass(cmdbuf);
+      SDL_UploadToGPUTexture(copyPass, &tex_transfer_info, &tex_reg, false);
+
+      SDL_EndGPUCopyPass(copyPass);
+    }
+    SDL_ReleaseGPUTransferBuffer(Device, trBuf);
+
+    if (!SDL_SubmitGPUCommandBuffer(cmdbuf)) {
+      LOG_ERROR("couldn't submit command buffer: {}", GETERR);
+      return false;
+    }
+  }
+  return true;
 }

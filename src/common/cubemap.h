@@ -8,6 +8,7 @@ enum class CubeMapUsage : u8
 {
   Skybox,
   IrradianceMap,
+  SpecularMap,
 };
 
 struct Cubemap

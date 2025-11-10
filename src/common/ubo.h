@@ -21,11 +21,10 @@ enum class UBOBindingType
 // vec4 EmissiveAlpha;
 struct MaterialDataBinding
 {
-  glm::vec4 color_factors; // 0-15
-  f32 metal_factor;        // 16-19
-  f32 rough_factor;        // 20-23
-  u32 feature_flags;       // 23-27
-  f32 __pad[1];            // 27-31
+  glm::vec4 color_factors;             // 0-15
+  glm::vec4 MetalRoughNormalOcclusion; // 16-31
+  glm::vec3 Emissive;                  // 32-43
+  u32 feature_flags;                   // 44-48
 };
 
 template<typename T>

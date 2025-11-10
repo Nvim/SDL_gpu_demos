@@ -334,8 +334,7 @@ ProjectionCubemapLoader::Load(std::filesystem::path path,
       tex_info.width = img.w;
       tex_info.layer_count_or_depth = 1;
       tex_info.num_levels = 1;
-      tex_info.usage =
-        SDL_GPU_TEXTUREUSAGE_SAMPLER | SDL_GPU_TEXTUREUSAGE_COLOR_TARGET;
+      tex_info.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER;
       tex_info.sample_count = SDL_GPU_SAMPLECOUNT_1;
     }
     tex = SDL_CreateGPUTexture(device_, &tex_info);

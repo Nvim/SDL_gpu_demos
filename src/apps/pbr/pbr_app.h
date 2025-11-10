@@ -13,6 +13,7 @@
 #include "common/scene_picker.h"
 #include "common/skybox.h"
 #include "common/transform.h"
+#include "common/types.h"
 #include "common/util.h"
 
 struct Rotation
@@ -76,6 +77,12 @@ class CubeProgram : public Program
     };
   };
 
+  using path = std::filesystem::path;
+  const path PBR_PATH{ "resources/textures/plains_sunset" };
+  const path BRDF_LUT_PATH{ PBR_PATH / "plains_sunset_LUT_GGX.png" };
+  const path SPECULAR_MAP_PATH{ PBR_PATH / "plains_sunset_GGX.ktx2" };
+  const path IRRADIANCE_MAP_PATH{ PBR_PATH / "plains_sunset_diffuse.ktx2" };
+
 public:
   CubeProgram(SDL_GPUDevice* device, SDL_Window* window, int w, int h);
   bool Init() override;
@@ -91,6 +98,7 @@ private:
   ImDrawData* DrawGui();
   void UpdateScene();
   void ChangeScene();
+  bool LoadPbrTextures();
 
 private:
   // Internals:
@@ -106,7 +114,7 @@ private:
                   Window,
                   Device };
   GLTFLoader loader_{ this };
-  std::filesystem::path default_scene_path_{
+  path default_scene_path_{
     MODELS_DIR / "DamagedHelmet/DamagedHelmetWithTangents.glb"
     // MODELS_DIR / "AlphaBlendModeTest.glb"
   };
@@ -128,9 +136,10 @@ private:
   // GPU Resources:
   SDL_GPUTexture* depth_target_{ nullptr };
   SDL_GPUTexture* color_target_{ nullptr };
-  // TODO: store scene-related GPU Resources in GLTF scene class
-  SDL_GPUShader* vertex_{ nullptr };
-  SDL_GPUShader* fragment_{ nullptr };
+  SDL_GPUTexture* brdf_lut_{ nullptr };
+  std::array<SDL_GPUSampler*, 3> pbr_samplers_{};
+  UniquePtr<Cubemap> irradiance_map_{ nullptr };
+  UniquePtr<Cubemap> specular_map_{ nullptr };
   SDL_GPUColorTargetInfo scene_color_target_info_{};
   SDL_GPUDepthStencilTargetInfo scene_depth_target_info_{};
   SDL_GPUColorTargetInfo swapchain_target_info_{};

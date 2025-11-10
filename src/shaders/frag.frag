@@ -17,6 +17,9 @@ layout(set = 2, binding = 1) uniform sampler2D TexMetalRough;
 layout(set = 2, binding = 2) uniform sampler2D TexNormal;
 layout(set = 2, binding = 3) uniform sampler2D TexAO;
 layout(set = 2, binding = 4) uniform sampler2D TexEmissive;
+layout(set = 2, binding = 5) uniform sampler2D TexBRDF;
+layout(set = 2, binding = 6) uniform samplerCube TexIrradianceMap;
+layout(set = 2, binding = 7) uniform samplerCube TexSpecularMap;
 
 // Data global to whole scene (120 bytes data, 8 to pad)
 layout(std140, set = 3, binding = 0) uniform uSceneData {
@@ -26,11 +29,11 @@ layout(std140, set = 3, binding = 0) uniform uSceneData {
 // Material-specific data. TODO: add normal scaling and AO strength params
 layout(set = 3, binding = 1) uniform uMaterialData {
     vec4 color_factors;
-    float metal_factor;
-    float rough_factor;
+    vec4 other_factors;
+    vec3 emissive_factor;
     uint feature_flags;
-    float _pad[1];
 } mat;
+
 // layout(std140, set = 1, binding = 1) uniform uDrawData {
 //     mat4 mat_m;
 //     uint mat_idx;
@@ -71,8 +74,8 @@ void main()
     vec3 emissive = vec3(0.0);
 
     vec4 diffuse_color = mat.color_factors;
-    float metalness = mat.metal_factor;
-    float roughness = mat.metal_factor;
+    float metalness = mat.other_factors.r;
+    float roughness = mat.color_factors.g;
     float ao = 1.0;
     vec3 F0 = vec3(0.04); // default for dielectrics, updated if material has metalness
 
@@ -84,8 +87,8 @@ void main()
 
     if (bool(mat.feature_flags & HAS_METALROUGH_TEX)) {
         vec3 metalrough = texture(TexMetalRough, inUv).rgb;
-        metalness = metalrough.b * mat.metal_factor;
-        roughness = metalrough.g * mat.rough_factor;
+        metalness *= metalrough.b;
+        roughness *= metalrough.g;
         roughness = clamp(roughness, 0.04, 1.0);
         roughness = roughness * roughness;
     }

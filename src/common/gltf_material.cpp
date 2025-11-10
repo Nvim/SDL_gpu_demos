@@ -26,9 +26,11 @@ GLTFPbrMaterial::Build()
   MaterialDataBinding binding{};
   {
     binding.color_factors = BaseColorFactor;
-    binding.metal_factor = MetallicFactor;
-    binding.rough_factor = RoughnessFactor;
     binding.feature_flags = FeatureFlags;
+    binding.MetalRoughNormalOcclusion.x = MetallicFactor;
+    binding.MetalRoughNormalOcclusion.y = RoughnessFactor;
+    binding.MetalRoughNormalOcclusion.z = NormalFactor;
+    binding.MetalRoughNormalOcclusion.w = OcclusionFactor;
   };
   mat->ubo =
     UBO(UBOBindingType::Fragment, MaterialBindingSlot, std::move(binding));
