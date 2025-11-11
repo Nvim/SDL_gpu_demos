@@ -78,10 +78,10 @@ class CubeProgram : public Program
   };
 
   using path = std::filesystem::path;
-  const path PBR_PATH{ "resources/textures/plains_sunset" };
-  const path BRDF_LUT_PATH{ PBR_PATH / "plains_sunset_LUT_GGX.png" };
-  const path SPECULAR_MAP_PATH{ PBR_PATH / "plains_sunset_GGX.ktx2" };
-  const path IRRADIANCE_MAP_PATH{ PBR_PATH / "plains_sunset_diffuse.ktx2" };
+  const path PBR_PATH{ "resources/textures/helipad" };
+  const path BRDF_LUT_PATH{ PBR_PATH / "brdf_lut.png" };
+  const path SPECULAR_MAP_PATH{ PBR_PATH / "specular.ktx2" };
+  const path IRRADIANCE_MAP_PATH{ PBR_PATH / "diffuse.ktx2" };
 
 public:
   CubeProgram(SDL_GPUDevice* device, SDL_Window* window, int w, int h);
@@ -110,7 +110,7 @@ private:
                   vp_width_ / (f32)vp_height_,
                   .1f,
                   100.f };
-  Skybox skybox_{ "resources/textures/plains_sunset/plains_sunset_4k.hdr",
+  Skybox skybox_{ PBR_PATH / "skybox.hdr",
                   Window,
                   Device };
   GLTFLoader loader_{ this };

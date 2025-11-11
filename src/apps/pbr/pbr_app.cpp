@@ -169,7 +169,8 @@ CubeProgram::Poll()
       return true;
     }
     last_asset = scene_picker_.CurrentAsset;
-    scenes_.push_back(std::move(ret));
+    // scenes_.push_back(std::move(ret));
+    scenes_[0] = std::move(ret);
   }
 
   return true;
@@ -518,7 +519,6 @@ CubeProgram::LoadPbrTextures()
         LOG_ERROR("Couldn't create texture: {}", GETERR);
         return false;
       }
-      SDL_SetGPUTextureName(Device, brdf_lut_, "LUTLUTLUT");
     }
 
     SDL_GPUSampler* sampler{ nullptr };

@@ -2,7 +2,7 @@
 
 #extension GL_GOOGLE_include_directive : require
 #include "scene_data.glsl"
-#include "material_features.h"
+#include "pbr_util.glsl"
 
 layout(location = 0) out vec4 OutFragColor;
 layout(location = 0) in vec3 inFragPos;
@@ -26,12 +26,9 @@ layout(std140, set = 3, binding = 0) uniform uSceneData {
     SceneData scene;
 };
 
-// Material-specific data. TODO: add normal scaling and AO strength params
-layout(set = 3, binding = 1) uniform uMaterialData {
-    vec4 color_factors;
-    vec4 other_factors;
-    vec3 emissive_factor;
-    uint feature_flags;
+// Material-specific data.
+layout(std140, set = 3, binding = 1) uniform uMaterialData {
+    MaterialUniform u;
 } mat;
 
 // layout(std140, set = 1, binding = 1) uniform uDrawData {
@@ -39,158 +36,93 @@ layout(set = 3, binding = 1) uniform uMaterialData {
 //     uint mat_idx;
 // };
 
-const float PI = 3.14159265359;
-
-// struct {
-//     vec3 direction;
-//     vec3 ambient;
-//     vec3 diffuse;
-//     // vec3 specular;
-// } SunLight = {
-//         sun_dir.xyz,
-//         vec3(sun_color.w),
-//         sun_color.xyz,
-//     };
-
-struct {
-    vec3 world_pos;
-    vec3 color;
-} PointLight = {
-        // vec3(10.f, 10.f, 10.f),
-        // vec3(1.f, 1.f, 1.f),
-        vec3(sun_dir),
-        vec3(sun_color),
-    };
-
-float DistributionGGX(vec3 normal, vec3 hvec, float roughness);
-float GeometrySchlickGGX(float NdotV, float roughness);
-float GeometrySmith(vec3 normal, vec3 view_dir, vec3 light_dir, float roughness);
-vec3 FresnelSchlick(float cosTheta, vec3 F0);
+// Keep ibl functions here because they sample 3d maps
+vec3 getIBLDiffuseLambertian(float NdotV, vec3 n, float roughness, vec3 diffuseColor, vec3 F0, vec2 brdf_sample);
+vec3 getIBLRadianceContributionGGX(vec3 normal, vec3 view, vec3 specularColor, vec2 brdf_sample, float nDotV, float roughness, float specularWeight);
 
 void main()
 {
-    vec3 normal = normalize(inNormal);
-    vec3 view_dir = normalize(camera_world.xyz - inFragPos);
-    vec3 emissive = vec3(0.0);
+    vec2 metalRough = Material_GetMetalRough(mat.u, TexMetalRough, inUv);
+    float metalness = metalRough.r;
+    float roughness = metalRough.g;
 
-    vec4 diffuse_color = mat.color_factors;
-    float metalness = mat.other_factors.r;
-    float roughness = mat.color_factors.g;
-    float ao = 1.0;
+    MaterialPBRData pbr_data = {
+        Material_GetDiffuse(mat.u, inColor, TexDiffuse, inUv),
+        Material_GetNormal(mat.u, inNormal, inTBN, TexNormal, inUv),
+        Material_GetEmissive(mat.u, TexEmissive, inUv),
+        metalness,
+        roughness,
+        Material_GetAO(mat.u, TexAO, inUv),
+    };
+    vec3 view_dir = normalize(camera_world - inFragPos);
+    float nDotV = dot(pbr_data.normal, view_dir);
     vec3 F0 = vec3(0.04); // default for dielectrics, updated if material has metalness
+    vec2 brdf_sample = texture(TexBRDF, vec2(max(nDotV, 0.0), pbr_data.roughness)).rg;
+    vec3 specular_color = mix(F0, pbr_data.diffuse.rgb, pbr_data.metalness);
 
-    // ** FEATURE TEST ** //
-    if (bool(mat.feature_flags & HAS_DIFFUSE_TEX)) {
-        diffuse_color *= texture(TexDiffuse, inUv);
-    }
-    diffuse_color *= inColor;
-
-    if (bool(mat.feature_flags & HAS_METALROUGH_TEX)) {
-        vec3 metalrough = texture(TexMetalRough, inUv).rgb;
-        metalness *= metalrough.b;
-        roughness *= metalrough.g;
-        roughness = clamp(roughness, 0.04, 1.0);
-        roughness = roughness * roughness;
-    }
-
-    if (bool(mat.feature_flags & HAS_NORMAL_TEX)) {
-        // TODO: Scaling
-        normal = texture(TexNormal, inUv).rgb;
-        normal = normal * 2.0 - 1.0; // [0, 1] -> [-1, 1]
-        normal = normalize(inTBN * normal);
-        if (!gl_FrontFacing) {
-            normal *= -1.0f;
-        }
-    }
-    if (bool(mat.feature_flags & HAS_EMISSIVE_TEX)) {
-        // TODO: factor
-        emissive = texture(TexEmissive, inUv).rgb;
-    }
-
-    if (bool(mat.feature_flags & HAS_OCCLUSION_TEX)) {
-        ao = texture(TexAO, inUv).r;
-    }
-
-    // TODO: normal & emissive maps
+    PointLight light = {
+            vec3(light_dir),
+            vec3(light_color),
+        };
 
     // ** COMPUTE LOOP ** //
     vec3 Lo = vec3(0.0); // accumulated result from all lights. TODO: vec4 for alpha
     for (int i = 0; i < 1; i++) {
-        vec3 light_dir = normalize(PointLight.world_pos - camera_world.xyz);
-        vec3 hvec = normalize(view_dir + light_dir);
-
-        float distance = length(PointLight.world_pos - camera_world.xyz);
-        float attenuation = 1.0 / (distance);
-        // vec3 radiance = PointLight.color * attenuation;
-        vec3 radiance = PointLight.color;
-
-        float D = DistributionGGX(normal, hvec, roughness);
-        float G = GeometrySmith(normal, view_dir, light_dir, roughness);
-        vec3 F = FresnelSchlick(max(dot(hvec, view_dir), 0.0), F0);
-
-        vec3 ks = F;
-        vec3 kd = vec3(1.0) - ks;
-        kd *= 1.0 - metalness; // nullify diffuse if material is metallic. metals only have specular
-
-        float ndotl = max(dot(normal, light_dir), 0.0);
-        vec3 DFG = D * F * G;
-        float den = 4.0 * max(dot(normal, view_dir), 0.0) * ndotl;
-        vec3 specular = DFG / (den + 0.0001);
-
-        // TODO: use diffuse color's alpha
-        Lo += (kd * diffuse_color.rgb / PI + specular) * radiance * ndotl;
-        Lo += specular;
+        Lo += LightContrib(pbr_data, light, camera_world, view_dir, F0);
     }
 
     // ambient
-    float ao_strength = 1.0; // TODO: use strength param from model
-    ao = 1.0 + ao_strength * (ao - 1.0);
-    vec3 ambient = vec3(0.03) * diffuse_color.rgb * ao;
-    vec3 result = Lo + ambient + emissive;
+    // float ao_strength = mat.other_factors.a; // TODO: use strength param from model
+    // ao = 1.0 + ao_strength * (ao - 1.0);
+    vec3 ibl_ambient = getIBLDiffuseLambertian(nDotV, pbr_data.normal, pbr_data.roughness, pbr_data.diffuse.rgb, F0, brdf_sample);
+    vec3 ibl_specular = getIBLRadianceContributionGGX(pbr_data.normal, view_dir, specular_color, brdf_sample, nDotV, pbr_data.roughness, 1.0);
+    vec3 result = Lo + + ibl_ambient + ibl_specular + pbr_data.emissive;
+    // result *= pbr_data.ao;
 
     // tone mapping + gamma correction
-    result = result / (result + vec3(1.0));
+    // result = result / (result + vec3(1.0));
     result = pow(result, vec3(1.0 / 2.2));
 
-    OutFragColor = vec4(result, diffuse_color.a);
+    OutFragColor = vec4(result, pbr_data.diffuse.a);
 }
 
-float DistributionGGX(vec3 normal, vec3 hvec, float roughness)
-{
-    float a = roughness * roughness;
-    float a2 = a * a;
-    float NdotH = max(dot(normal, hvec), 0.0);
-    float NdotH2 = NdotH * NdotH;
+// ******************************* IBL ************************************* //
+vec3 getIBLDiffuseLambertian(float NdotV, vec3 n, float roughness, vec3 diffuseColor, vec3 F0, vec2 brdf_sample) {
+    vec2 brdfSamplePoint = clamp(vec2(NdotV, roughness), vec2(0.0, 0.0), vec2(1.0, 1.0));
 
-    float num = a2;
-    float den = (NdotH2 * (a2 - 1.0) + 1.0);
-    den = PI * den * den;
+    vec3 irradiance = texture(TexIrradianceMap, n.xyz).rgb;
 
-    return num / den;
+    // see https://bruop.github.io/ibl/#single_scattering_results at Single Scattering Results
+    // Roughness dependent fresnel, from Fdez-Aguera
+    vec3 Fr = max(vec3(1.0 - roughness), F0) - F0;
+    vec3 k_S = F0 + Fr * pow(1.0 - NdotV, 5.0);
+    vec3 FssEss = k_S * brdf_sample.x + brdf_sample.y; // <--- GGX / specular light contribution (scale it down if the specularWeight is low)
+
+    // Multiple scattering, from Fdez-Aguera
+    float Ems = (1.0 - (brdf_sample.x + brdf_sample.y));
+    vec3 F_avg = (F0 + (1.0 - F0) / 21.0);
+    vec3 FmsEms = Ems * FssEss * F_avg / (1.0 - F_avg * Ems);
+    vec3 k_D = diffuseColor * (1.0 - FssEss + FmsEms); // we use +FmsEms as indicated by the formula in the blog post (might be a typo in the implementation)
+
+    return (FmsEms + k_D) * irradiance;
 }
 
-float GeometrySchlickGGX(float NdotV, float roughness) {
-    float r = (roughness + 1.0);
-    float k = (r * r) / 8.0;
+vec3 getIBLRadianceContributionGGX(vec3 normal, vec3 view, vec3 specularColor, vec2 brdf_sample, float nDotV, float roughness, float specularWeight) {
+    vec3 reflection = -normalize(reflect(view, normal));
+    float mipCount = textureQueryLevels(TexSpecularMap);
+    float lod = roughness * (mipCount - 1);
 
-    float num = NdotV;
-    float den = NdotV * (1.0 - k) + k;
+    vec3 specularLight = textureLod(TexSpecularMap, reflection, lod).rgb;
 
-    return num / den;
+    // see https://bruop.github.io/ibl/#single_scattering_results at Single Scattering Results
+    // Roughness dependent fresnel, from Fdez-Aguera
+    vec3 Fr = max(vec3(1.0 - roughness), specularColor) - specularColor;
+    vec3 k_S = specularColor + Fr * pow(1.0 - nDotV, 5.0);
+    vec3 FssEss = k_S * brdf_sample.x + brdf_sample.y;
+
+    return specularWeight * specularLight * FssEss;
 }
-
-float GeometrySmith(vec3 normal, vec3 view_dir, vec3 light_dir, float roughness) {
-    float NdotV = max(dot(normal, view_dir), 0.0);
-    float NdotL = max(dot(normal, light_dir), 0.0);
-    float ggx2 = GeometrySchlickGGX(NdotV, roughness);
-    float ggx1 = GeometrySchlickGGX(NdotL, roughness);
-
-    return ggx1 * ggx2;
-}
-
-vec3 FresnelSchlick(float cosTheta, vec3 F0) {
-    return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
-}
+// ************************************************************************* //
 
 // From https://ogldev.org/www/tutorial26/tutorial26.html
 // To be used with his manual tangent computing method. No .w component

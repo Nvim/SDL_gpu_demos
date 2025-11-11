@@ -31,6 +31,7 @@ GLTFPbrMaterial::Build()
     binding.MetalRoughNormalOcclusion.y = RoughnessFactor;
     binding.MetalRoughNormalOcclusion.z = NormalFactor;
     binding.MetalRoughNormalOcclusion.w = OcclusionFactor;
+    binding.Emissive = glm::vec3{EmissiveFactor};
   };
   mat->ubo =
     UBO(UBOBindingType::Fragment, MaterialBindingSlot, std::move(binding));
