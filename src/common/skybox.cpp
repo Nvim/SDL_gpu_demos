@@ -53,13 +53,10 @@ Skybox::Init()
   ICubemapLoader* loader;
   if (std::filesystem::is_directory(path_)) {
     loader = new MultifileCubemapLoader{ device_ };
-    FragPath = SDR_FRAGMENT_SHADER;
   } else if (path_.extension().compare(".hdr") == 0) {
     loader = new ProjectionCubemapLoader{ device_ };
-    FragPath = HDR_FRAGMENT_SHADER;
   } else {
     loader = new KtxCubemapLoader{ device_ };
-    FragPath = HDR_FRAGMENT_SHADER;
   }
 
   Cubemap = loader->Load(path_, CubeMapUsage::Skybox);

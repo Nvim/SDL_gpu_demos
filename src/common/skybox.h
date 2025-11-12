@@ -23,12 +23,10 @@ public:
   void Draw(SDL_GPURenderPass* pass) const;
 
 public:
-  const char* VertPath = "resources/shaders/compiled/skybox.vert.spv";
-  const char* FragPath = "resources/shaders/compiled/skybox.frag.spv";
-  static constexpr const char* SDR_FRAGMENT_SHADER =
+  static constexpr const char* FRAG_PATH =
     "resources/shaders/compiled/skybox.frag.spv";
-  static constexpr const char* HDR_FRAGMENT_SHADER =
-    "resources/shaders/compiled/skybox_hdr.frag.spv";
+  const char* VertPath = "resources/shaders/compiled/skybox.vert.spv";
+  const char* FragPath = FRAG_PATH;
   UniquePtr<Cubemap> Cubemap{};
   SDL_GPUSampler* CubemapSampler{};
   SDL_GPUBuffer* VertexBuffer{};
