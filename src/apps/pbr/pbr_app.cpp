@@ -7,6 +7,7 @@
 #include "common/logger.h"
 #include "common/types.h"
 #include "common/util.h"
+#include "shaders/debug_flags.h"
 
 #include <glm/gtc/constants.hpp>
 #include <imgui/backends/imgui_impl_sdl3.h>
@@ -230,13 +231,16 @@ CubeProgram::Draw()
   auto draw_data = DrawGui();
   auto d = instance_cfg.dimension;
   auto total_instances = d * d * d;
-  SceneDataBinding scene_data{ vp,
-                               camera_.Model(),
-                               glm::vec4{ camera_.Position, 0.f },
-                               glm::vec4{ light_pos_, 0.f },
-                               glm::vec4{ .9f, .9f, .9f, .1f },
-                               instance_cfg.spread,
-                               instance_cfg.dimension };
+  SceneDataBinding scene_data{
+    vp,
+    camera_.Model(),
+    glm::vec4{ camera_.Position, 0.f },
+    glm::vec4{ light_pos_, 0.f },
+    glm::vec4{ .9f, .9f, .9f, .1f },
+    instance_cfg.spread,
+    instance_cfg.dimension,
+    shader_debug_flags_,
+  };
 
   ImGui_ImplSDLGPU3_PrepareDrawData(draw_data, cmdbuf);
 
@@ -395,6 +399,12 @@ CubeProgram::InitGui()
   return ImGui_ImplSDLGPU3_Init(&init_info);
 }
 
+struct PbrFlag
+{
+  const char* label;
+  u32 flag_value;
+};
+
 ImDrawData*
 CubeProgram::DrawGui()
 {
@@ -440,6 +450,45 @@ CubeProgram::DrawGui()
       }
       if (ImGui::TreeNode("Lighting")) {
         if (ImGui::SliderFloat3("Position", (float*)&light_pos_, -20.f, 20.f)) {
+        }
+        ImGui::TreePop();
+      }
+      if (ImGui::TreeNode("PBR Settings")) {
+        // Each flag's name and the corresponding bit
+        static constexpr PbrFlag flags[] = {
+          { "USE_DIFFUSE_TEX", USE_DIFFUSE_TEX },
+          { "USE_VERTEX_COLOR", USE_VERTEX_COLOR },
+          { "USE_NORMAL_TEX", USE_NORMAL_TEX },
+          { "USE_NORMAL_FACT", USE_NORMAL_FACT },
+          { "USE_METAL_TEX", USE_METAL_TEX },
+          { "USE_ROUGH_TEX", USE_ROUGH_TEX },
+          { "USE_OCCLUSION_TEX", USE_OCCLUSION_TEX },
+          { "USE_OCCLUSION_FACT", USE_OCCLUSION_FACT },
+          { "USE_EMISSIVE_FACT", USE_EMISSIVE_FACT },
+          { "USE_EMISSIVE_TEX", USE_EMISSIVE_TEX },
+          { "USE_IBL_SPECULAR", USE_IBL_SPECULAR },
+          { "USE_IBL_DIFFUSE", USE_IBL_DIFFUSE },
+          { "USE_POINTLIGHTS", USE_POINTLIGHTS },
+          { "USE_TONEMAPPING", USE_TONEMAPING },
+          { "USE_GAMMA_CORRECT", USE_GAMMA_CORRECT },
+        };
+
+        if(ImGui::Button("Disable all")) {
+          shader_debug_flags_ = 0;
+        }
+        if(ImGui::Button("Enable all")) {
+          shader_debug_flags_ = 0xFFFFFFFF;
+        }
+
+        for (const PbrFlag& flag : flags) {
+          bool flag_set = (shader_debug_flags_ & flag.flag_value) != 0;
+          if (ImGui::Checkbox(flag.label, &flag_set)) {
+            if (flag_set) {
+              shader_debug_flags_ |= flag.flag_value;
+            } else {
+              shader_debug_flags_ &= ~flag.flag_value;
+            }
+          }
         }
         ImGui::TreePop();
       }

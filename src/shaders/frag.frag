@@ -3,6 +3,7 @@
 #extension GL_GOOGLE_include_directive : require
 #include "scene_data.glsl"
 #include "pbr_util.glsl"
+#include "debug_flags.h"
 
 layout(location = 0) out vec4 OutFragColor;
 layout(location = 0) in vec3 inFragPos;
@@ -40,20 +41,22 @@ layout(std140, set = 3, binding = 1) uniform uMaterialData {
 vec3 getIBLDiffuseLambertian(float NdotV, vec3 n, float roughness, vec3 diffuseColor, vec3 F0, vec2 brdf_sample);
 vec3 getIBLRadianceContributionGGX(vec3 normal, vec3 view, vec3 specularColor, vec2 brdf_sample, float nDotV, float roughness, float specularWeight);
 
+#define FLAG_ON(value) bool(debug_flags & value)
+
 void main()
 {
-    vec2 metalRough = Material_GetMetalRough(mat.u, TexMetalRough, inUv);
-    float metalness = metalRough.r;
-    float roughness = metalRough.g;
+    vec2 metalRough = Material_GetMetalRough(mat.u, TexMetalRough, inUv, debug_flags);
+    float metalness = FLAG_ON(USE_METAL_TEX) ? metalRough.r : 0.0;
+    float roughness = FLAG_ON(USE_ROUGH_TEX) ? metalRough.g : 0.0;
 
     MaterialPBRData pbr_data = {
-        Material_GetDiffuse(mat.u, inColor, TexDiffuse, inUv),
-        Material_GetNormal(mat.u, inNormal, inTBN, TexNormal, inUv),
-        Material_GetEmissive(mat.u, TexEmissive, inUv),
-        metalness,
-        roughness,
-        Material_GetAO(mat.u, TexAO, inUv),
-    };
+            Material_GetDiffuse(mat.u, inColor, TexDiffuse, inUv, debug_flags),
+            Material_GetNormal(mat.u, inNormal, inTBN, TexNormal, inUv, debug_flags),
+            Material_GetEmissive(mat.u, TexEmissive, inUv, debug_flags),
+            metalness,
+            roughness,
+            Material_GetAO(mat.u, TexAO, inUv, debug_flags),
+        };
     vec3 view_dir = normalize(camera_world - inFragPos);
     float nDotV = dot(pbr_data.normal, view_dir);
     vec3 F0 = vec3(0.04); // default for dielectrics, updated if material has metalness
@@ -66,22 +69,33 @@ void main()
         };
 
     // ** COMPUTE LOOP ** //
-    vec3 Lo = vec3(0.0); // accumulated result from all lights. TODO: vec4 for alpha
-    for (int i = 0; i < 1; i++) {
-        Lo += LightContrib(pbr_data, light, camera_world, view_dir, F0);
+    vec3 result = vec3(0.0);
+    if (FLAG_ON(USE_POINTLIGHTS)) {
+        for (int i = 0; i < 1; i++) {
+            result += LightContrib(pbr_data, light, camera_world, view_dir, F0);
+        }
     }
 
-    // ambient
-    // float ao_strength = mat.other_factors.a; // TODO: use strength param from model
-    // ao = 1.0 + ao_strength * (ao - 1.0);
-    vec3 ibl_ambient = getIBLDiffuseLambertian(nDotV, pbr_data.normal, pbr_data.roughness, pbr_data.diffuse.rgb, F0, brdf_sample);
-    vec3 ibl_specular = getIBLRadianceContributionGGX(pbr_data.normal, view_dir, specular_color, brdf_sample, nDotV, pbr_data.roughness, 1.0);
-    vec3 result = Lo + + ibl_ambient + ibl_specular + pbr_data.emissive;
-    // result *= pbr_data.ao;
+    if (FLAG_ON(USE_IBL_DIFFUSE)) {
+        vec3 ibl_ambient = getIBLDiffuseLambertian(nDotV, pbr_data.normal, pbr_data.roughness, pbr_data.diffuse.rgb, F0, brdf_sample);
+        result += ibl_ambient;
+    }
 
-    // tone mapping + gamma correction
-    // result = result / (result + vec3(1.0));
-    result = pow(result, vec3(1.0 / 2.2));
+    if (FLAG_ON(USE_IBL_SPECULAR)) {
+        vec3 ibl_specular = getIBLRadianceContributionGGX(pbr_data.normal, view_dir, specular_color, brdf_sample, nDotV, pbr_data.roughness, 1.0);
+        result += ibl_specular;
+    }
+
+    result += pbr_data.emissive;
+    result *= pbr_data.ao;
+
+    if (FLAG_ON(USE_TONEMAPING)) {
+        result = result / (result + vec3(1.0));
+    }
+
+    if (FLAG_ON(USE_GAMMA_CORRECT)) {
+        result = pow(result, vec3(1.0 / 2.2));
+    }
 
     OutFragColor = vec4(result, pbr_data.diffuse.a);
 }

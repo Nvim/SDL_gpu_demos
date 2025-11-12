@@ -1,4 +1,5 @@
 #include "material_features.h"
+#include "debug_flags.h"
 
 struct PointLight {
     vec3 world_pos;
@@ -25,18 +26,22 @@ struct MaterialPBRData {
     float ao;
 };
 
-vec4 Material_GetDiffuse(MaterialUniform mat, vec4 vertex_color, sampler2D tex, vec2 uv) {
+#define DEBUG_FLAG(value) bool(flags & value)
+#define MATERIAL_FLAG(value) bool(mat.feature_flags & value)
+vec4 Material_GetDiffuse(MaterialUniform mat, vec4 vertex_color, sampler2D tex, vec2 uv, uint flags) {
     vec4 diffuse_color = mat.color_factors;
-    if (bool(mat.feature_flags & HAS_DIFFUSE_TEX)) {
+    if (MATERIAL_FLAG(HAS_DIFFUSE_TEX) && DEBUG_FLAG(USE_DIFFUSE_TEX)) {
         diffuse_color *= texture(tex, uv);
     }
-    diffuse_color *= vertex_color;
+    if (DEBUG_FLAG(USE_VERTEX_COLOR)) {
+        diffuse_color *= vertex_color;
+    }
     return diffuse_color;
 }
 
-vec3 Material_GetNormal(MaterialUniform mat, vec3 vertex_normal, mat3 tbn, sampler2D tex, vec2 uv) {
+vec3 Material_GetNormal(MaterialUniform mat, vec3 vertex_normal, mat3 tbn, sampler2D tex, vec2 uv, uint flags) {
     vec3 normal = normalize(vertex_normal);
-    if (bool(mat.feature_flags & HAS_NORMAL_TEX)) {
+    if (MATERIAL_FLAG(HAS_NORMAL_TEX) && DEBUG_FLAG(USE_NORMAL_TEX)) {
         normal = texture(tex, uv).rgb;
         normal = normal * 2.0 - 1.0; // [0, 1] -> [-1, 1]
         normal = normalize(tbn * normal); // tangent -> world
@@ -44,40 +49,52 @@ vec3 Material_GetNormal(MaterialUniform mat, vec3 vertex_normal, mat3 tbn, sampl
             normal *= -1.0f;
         }
     }
-    vec3 scale = vec3(mat.other_factors.z, mat.other_factors.z, 1.0);
-    return normal * scale;
+    if (DEBUG_FLAG(USE_NORMAL_FACT)) {
+        normal *= vec3(mat.other_factors.z, mat.other_factors.z, 1.0);
+    }
+    return normal;
 }
 
-vec2 Material_GetMetalRough(MaterialUniform mat, sampler2D tex, vec2 uv) {
+vec2 Material_GetMetalRough(MaterialUniform mat, sampler2D tex, vec2 uv, uint flags) {
     float metalness = mat.other_factors.r;
     float roughness = mat.color_factors.g;
 
-    if (bool(mat.feature_flags & HAS_METALROUGH_TEX)) {
+    if (MATERIAL_FLAG(HAS_METALROUGH_TEX)) {
         vec3 metalrough = texture(tex, uv).rgb;
         metalness *= metalrough.b;
         roughness *= metalrough.g;
         roughness = clamp(roughness, 0.04, 1.0);
         roughness = roughness * roughness;
     }
-    return vec2(metalness, roughness);
+    return vec2(
+        DEBUG_FLAG(USE_METAL_TEX) ? metalness : 0.0,
+        DEBUG_FLAG(USE_ROUGH_TEX) ? roughness : 0.0
+    );
 }
 
-vec3 Material_GetEmissive(MaterialUniform mat, sampler2D tex, vec2 uv) {
+vec3 Material_GetEmissive(MaterialUniform mat, sampler2D tex, vec2 uv, uint flags) {
     vec3 emissive = vec3(0.0);
-    if (bool(mat.feature_flags & HAS_EMISSIVE_TEX)) {
+    if (MATERIAL_FLAG(HAS_EMISSIVE_TEX) && DEBUG_FLAG(USE_EMISSIVE_TEX)) {
         emissive = texture(tex, uv).rgb;
+    }
+    if (DEBUG_FLAG(USE_EMISSIVE_FACT)) {
         emissive *= mat.emissive_factor;
     }
     return emissive;
 }
 
-float Material_GetAO(MaterialUniform mat, sampler2D tex, vec2 uv) {
+float Material_GetAO(MaterialUniform mat, sampler2D tex, vec2 uv, uint flags) {
     float ao = 1.0;
-    if (bool(mat.feature_flags & HAS_OCCLUSION_TEX)) {
-        ao = texture(tex, uv).r * mat.other_factors.a;
+    if (MATERIAL_FLAG(HAS_OCCLUSION_TEX) && DEBUG_FLAG(USE_OCCLUSION_TEX)) {
+        ao = texture(tex, uv).r;
+    }
+    if (DEBUG_FLAG(USE_OCCLUSION_FACT)) {
+        ao *= mat.other_factors.a;
     }
     return ao;
 }
+#undef DEBUG_FLAG
+#undef MATERIAL_FLAG
 // ************************************************************************* //
 
 // ******************************* NDF ************************************* //
@@ -130,7 +147,7 @@ vec3 LightContrib(
 
     float distance = length(light.world_pos - camera_pos);
     float attenuation = 1.0 / distance;
-    vec3 radiance = light.color ;
+    vec3 radiance = light.color;
 
     // Use pbr_data instead of pbr
     float D = DistributionGGX(pbr_data.normal, hvec, pbr_data.roughness);

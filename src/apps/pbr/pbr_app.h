@@ -45,7 +45,8 @@ struct SceneDataBinding
   glm::vec4 sun_color;
   f32 spread;
   u32 dimension;
-  f32 _pad[2] = { 0.f };
+  u32 debug_flags; // View 'shaders/debug_flags.h'
+  f32 _pad[1] = { 0.f };
 };
 
 struct DrawDataBinding
@@ -110,9 +111,7 @@ private:
                   vp_width_ / (f32)vp_height_,
                   .1f,
                   100.f };
-  Skybox skybox_{ PBR_PATH / "skybox.hdr",
-                  Window,
-                  Device };
+  Skybox skybox_{ PBR_PATH / "skybox.hdr", Window, Device };
   GLTFLoader loader_{ this };
   path default_scene_path_{
     MODELS_DIR / "DamagedHelmet/DamagedHelmetWithTangents.glb"
@@ -132,6 +131,7 @@ private:
   bool skybox_toggle_{ true };
   i32 tex_idx{ 0 };
   glm::vec3 light_pos_{ 10.f };
+  u32 shader_debug_flags_{ 0xFFFFFFFF };
 
   // GPU Resources:
   SDL_GPUTexture* depth_target_{ nullptr };

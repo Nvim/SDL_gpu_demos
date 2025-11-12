@@ -6,6 +6,7 @@ struct SceneData {
     vec4 light_color;
     float spread;
     uint dimension;
+    uint debug_flags;
 };
 
 #define mat_viewproj    scene.mat_viewproj
@@ -15,3 +16,4 @@ struct SceneData {
 #define light_color     scene.light_color
 #define spread          scene.spread
 #define dimension       scene.dimension
+#define debug_flags     scene.debug_flags 
