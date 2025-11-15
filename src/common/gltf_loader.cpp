@@ -81,6 +81,13 @@ GLTFLoader::GLTFLoader(Program* program)
   CreateDefaultMaterial();
 }
 
+GLTFLoader::GLTFLoader(Program* program,
+                       SDL_GPUTextureFormat framebuffer_format)
+  : GLTFLoader{ program }
+{
+  framebuffer_format_ = framebuffer_format;
+}
+
 bool
 GLTFLoader::IsInitialized()
 {
@@ -921,7 +928,6 @@ bool
 GLTFLoader::CreatePipelines()
 {
   auto Device = program_->Device;
-  auto Window = program_->Window;
 
   SDL_GPUShader* vs{ nullptr };
   SDL_GPUShader* fs{ nullptr };
@@ -948,11 +954,10 @@ GLTFLoader::CreatePipelines()
     }
   }
 
-  // TODO: query client's available modes and select an HDR mode:
   SDL_GPUColorTargetDescription color_descs[1]{};
   {
     auto& d = color_descs[0];
-    d.format = SDL_GetGPUSwapchainTextureFormat(Device, Window);
+    d.format = SDL_GPU_TEXTUREFORMAT_R16G16B16A16_FLOAT;
     disable_blending(d);
   }
 
@@ -1005,7 +1010,6 @@ GLTFLoader::CreatePipelines()
 
   { // Enable blending
     auto& d = color_descs[0];
-    d.format = SDL_GetGPUSwapchainTextureFormat(Device, Window);
     enable_blending(d);
     // Transparent objects don't write to depth buffer
     pipelineCreateInfo.depth_stencil_state.enable_depth_write = false;

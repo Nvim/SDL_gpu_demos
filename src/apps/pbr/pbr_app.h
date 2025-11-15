@@ -84,6 +84,12 @@ class CubeProgram : public Program
   const path SPECULAR_MAP_PATH{ PBR_PATH / "specular.ktx2" };
   const path IRRADIANCE_MAP_PATH{ PBR_PATH / "diffuse.ktx2" };
 
+  static constexpr const char* POST_PROCESS_PATH =
+    "resources/shaders/compiled/post_process.comp.spv";
+
+  static constexpr auto HDR_TARGET_FORMAT =
+    SDL_GPU_TEXTUREFORMAT_R16G16B16A16_FLOAT;
+
 public:
   CubeProgram(SDL_GPUDevice* device, SDL_Window* window, int w, int h);
   bool Init() override;
@@ -100,6 +106,7 @@ private:
   void UpdateScene();
   void ChangeScene();
   bool LoadPbrTextures();
+  bool CreatePostProcessPipeline();
 
 private:
   // Internals:
@@ -112,7 +119,7 @@ private:
                   .1f,
                   100.f };
   Skybox skybox_{ PBR_PATH / "skybox.hdr", Window, Device };
-  GLTFLoader loader_{ this };
+  GLTFLoader loader_{ this, HDR_TARGET_FORMAT };
   path default_scene_path_{
     MODELS_DIR / "DamagedHelmet/DamagedHelmetWithTangents.glb"
     // MODELS_DIR / "AlphaBlendModeTest.glb"
@@ -135,14 +142,19 @@ private:
 
   // GPU Resources:
   SDL_GPUTexture* depth_target_{ nullptr };
-  SDL_GPUTexture* color_target_{ nullptr };
+  SDL_GPUTexture* hdr_color_target_{ nullptr }; // color pass, hdr space
+  SDL_GPUTexture* post_processed_target_{
+    nullptr
+  }; // final pass output, tone-mapped
   SDL_GPUTexture* brdf_lut_{ nullptr };
   std::array<SDL_GPUSampler*, 3> pbr_samplers_{};
   UniquePtr<Cubemap> irradiance_map_{ nullptr };
   UniquePtr<Cubemap> specular_map_{ nullptr };
   SDL_GPUColorTargetInfo scene_color_target_info_{};
+  SDL_GPUColorTargetInfo post_process_target_info_{};
   SDL_GPUDepthStencilTargetInfo scene_depth_target_info_{};
   SDL_GPUColorTargetInfo swapchain_target_info_{};
+  SDL_GPUComputePipeline* post_process_pipeline{};
 
 #define RED 1.0, 0.0, 0.0
 #define GREEN 0.0, 1.0, 0.0

@@ -29,6 +29,11 @@ CubeProgram::CubeProgram(SDL_GPUDevice* device,
   }
 
   {
+    post_process_target_info_.load_op = SDL_GPU_LOADOP_DONT_CARE;
+    post_process_target_info_.store_op = SDL_GPU_STOREOP_STORE;
+  }
+
+  {
     scene_depth_target_info_.cycle = true;
     scene_depth_target_info_.clear_depth = 1;
     scene_depth_target_info_.clear_stencil = 0;
@@ -74,8 +79,10 @@ CubeProgram::~CubeProgram()
   }
 
   RELEASE_IF(depth_target_, SDL_ReleaseGPUTexture);
-  RELEASE_IF(color_target_, SDL_ReleaseGPUTexture);
+  RELEASE_IF(hdr_color_target_, SDL_ReleaseGPUTexture);
+  RELEASE_IF(post_processed_target_, SDL_ReleaseGPUTexture);
   RELEASE_IF(brdf_lut_, SDL_ReleaseGPUTexture);
+  RELEASE_IF(post_process_pipeline, SDL_ReleaseGPUComputePipeline);
   loader_.Release();
 
   LOG_DEBUG("Released GPU Resources");
@@ -121,6 +128,12 @@ CubeProgram::Init()
     return false;
   }
   LOG_DEBUG("Loaded pbr textures");
+
+  if (!CreatePostProcessPipeline()) {
+    LOG_CRITICAL("Couldn't create post-process pipeline");
+    return false;
+  }
+  LOG_DEBUG("Created post-process pipeline");
 
   global_transform_.translation_ = { 0.f, 0.f, 0.0f };
   global_transform_.scale_ = { 1.f, 1.f, 1.f };
@@ -247,8 +260,6 @@ CubeProgram::Draw()
   stats_.Reset(); // Reset stats after GUI has drawn
   // Scene Pass
   {
-    scene_color_target_info_.texture = color_target_;
-    scene_depth_target_info_.texture = depth_target_;
     SDL_PushGPUVertexUniformData(cmdbuf, 0, &scene_data, sizeof(scene_data));
     SDL_PushGPUFragmentUniformData(cmdbuf, 0, &scene_data, sizeof(scene_data));
 
@@ -304,6 +315,23 @@ CubeProgram::Draw()
     SDL_EndGPURenderPass(scenePass);
   }
 
+  // Post-Process pass
+  {
+    SDL_GPUStorageTextureReadWriteBinding tex_bind{};
+    {
+      tex_bind.texture = post_processed_target_;
+      tex_bind.cycle = true;
+    }
+    SDL_GPUComputePass* pass =
+      SDL_BeginGPUComputePass(cmdbuf, &tex_bind, 1, nullptr, 0);
+
+    SDL_BindGPUComputePipeline(pass, post_process_pipeline);
+    SDL_BindGPUComputeStorageTextures(pass, 0, &hdr_color_target_, 1);
+    SDL_DispatchGPUCompute(pass, vp_width_ / 8, vp_height_ / 8, 1);
+
+    SDL_EndGPUComputePass(pass);
+  }
+
   // GUI Pass
   {
     swapchain_target_info_.texture = swapchainTexture;
@@ -340,25 +368,42 @@ CubeProgram::CreateSceneRenderTargets()
 {
   LOG_TRACE("CubeProgram::CreateSceneRenderTargets");
   auto info = SDL_GPUTextureCreateInfo{};
-  {
+
+  { // HDR scene pass target
     info.type = SDL_GPU_TEXTURETYPE_2D;
-    info.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
+    info.format = HDR_TARGET_FORMAT;
     info.width = static_cast<Uint32>(vp_width_);
     info.height = static_cast<Uint32>(vp_height_);
     info.layer_count_or_depth = 1;
     info.num_levels = 1;
     info.sample_count = SDL_GPU_SAMPLECOUNT_1;
-    info.usage =
-      SDL_GPU_TEXTUREUSAGE_SAMPLER | SDL_GPU_TEXTUREUSAGE_COLOR_TARGET;
+    info.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER |
+                 SDL_GPU_TEXTUREUSAGE_COLOR_TARGET |
+                 SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_READ;
+    hdr_color_target_ = SDL_CreateGPUTexture(Device, &info);
   }
-  color_target_ = SDL_CreateGPUTexture(Device, &info);
 
-  info.format = SDL_GPU_TEXTUREFORMAT_D16_UNORM;
-  info.usage =
-    SDL_GPU_TEXTUREUSAGE_SAMPLER | SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET;
-  depth_target_ = SDL_CreateGPUTexture(Device, &info);
+  { // Post processing pass target (HDR -> SDR compute shader)
+    info.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
+    info.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER |
+                 SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_READ |
+                 SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_WRITE;
+    post_processed_target_ = SDL_CreateGPUTexture(Device, &info);
+  }
 
-  return depth_target_ != nullptr && color_target_ != nullptr;
+  { // Depth target
+    info.format = SDL_GPU_TEXTUREFORMAT_D16_UNORM;
+    info.usage =
+      SDL_GPU_TEXTUREUSAGE_SAMPLER | SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET;
+    depth_target_ = SDL_CreateGPUTexture(Device, &info);
+  }
+
+  post_process_target_info_.texture = post_processed_target_;
+  scene_color_target_info_.texture = hdr_color_target_;
+  scene_depth_target_info_.texture = depth_target_;
+
+  return depth_target_ != nullptr && hdr_color_target_ != nullptr &&
+         post_processed_target_ != nullptr;
 }
 
 bool
@@ -420,7 +465,7 @@ CubeProgram::DrawGui()
   {
     if (ImGui::Begin("Scene")) {
       ImGui::Text("Hello world");
-      ImGui::Image((ImTextureID)(intptr_t)color_target_,
+      ImGui::Image((ImTextureID)(intptr_t)post_processed_target_,
                    ImVec2((float)vp_width_, (float)vp_height_));
       ImGui::End();
     }
@@ -473,10 +518,10 @@ CubeProgram::DrawGui()
           { "USE_GAMMA_CORRECT", USE_GAMMA_CORRECT },
         };
 
-        if(ImGui::Button("Disable all")) {
+        if (ImGui::Button("Disable all")) {
           shader_debug_flags_ = 0;
         }
-        if(ImGui::Button("Enable all")) {
+        if (ImGui::Button("Enable all")) {
           shader_debug_flags_ = 0xFFFFFFFF;
         }
 
@@ -644,6 +689,51 @@ CubeProgram::LoadPbrTextures()
       LOG_ERROR("couldn't submit command buffer: {}", GETERR);
       return false;
     }
+  }
+  return true;
+}
+
+bool
+CubeProgram::CreatePostProcessPipeline()
+{
+  LOG_TRACE("CubeProgram::CreatePostProcessPipeline");
+
+  u64 codeSize;
+  void* code = SDL_LoadFile(POST_PROCESS_PATH, &codeSize);
+  if (code == nullptr) {
+    LOG_ERROR("Couldn't load compute shader file: {}", GETERR);
+    return false;
+  }
+
+  SDL_GPUColorTargetDescription color_descs[1]{};
+  {
+    auto& d = color_descs[0];
+    d.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
+  }
+
+  SDL_GPUComputePipelineCreateInfo pipelineInfo{};
+  {
+    pipelineInfo.code = (u8*)code;
+    pipelineInfo.code_size = codeSize;
+    pipelineInfo.entrypoint = "main";
+    pipelineInfo.format = SDL_GPU_SHADERFORMAT_SPIRV;
+    pipelineInfo.num_samplers = 0;
+    pipelineInfo.num_readonly_storage_textures = 1;
+    pipelineInfo.num_readonly_storage_buffers = 0;
+    pipelineInfo.num_readwrite_storage_textures = 1;
+    pipelineInfo.num_readwrite_storage_buffers = 0;
+    pipelineInfo.num_uniform_buffers = 0;
+    pipelineInfo.threadcount_x = 16;
+    pipelineInfo.threadcount_y = 16;
+    pipelineInfo.threadcount_z = 1;
+  }
+
+  post_process_pipeline = SDL_CreateGPUComputePipeline(Device, &pipelineInfo);
+  SDL_free(code);
+
+  if (post_process_pipeline == nullptr) {
+    LOG_ERROR("Couldn't create compute pipeline: {}", GETERR);
+    return false;
   }
   return true;
 }

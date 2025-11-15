@@ -89,14 +89,7 @@ void main()
     result += pbr_data.emissive;
     result *= pbr_data.ao;
 
-    if (FLAG_ON(USE_TONEMAPING)) {
-        result = result / (result + vec3(1.0));
-    }
-
-    if (FLAG_ON(USE_GAMMA_CORRECT)) {
-        result = pow(result, vec3(1.0 / 2.2));
-    }
-
+    // Output is in Linear, HDR space
     OutFragColor = vec4(result, pbr_data.diffuse.a);
 }
 

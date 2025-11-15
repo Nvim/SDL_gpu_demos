@@ -22,6 +22,7 @@ class GLTFLoader
 
 public:
   GLTFLoader(Program* program);
+  GLTFLoader(Program* program, SDL_GPUTextureFormat framebuffer_format);
   ~GLTFLoader();
 
   bool Load(GLTFScene* scene, std::filesystem::path& path);
@@ -68,6 +69,10 @@ private:
 
 private:
   Program* program_;
+
+  // Used for material pipeline creation, default assumes HDR framebuffer
+  SDL_GPUTextureFormat framebuffer_format_ =
+    SDL_GPU_TEXTUREFORMAT_R16G16B16A16_FLOAT;
   fastgltf::Asset asset_;
   UniquePtr<TangentLoader> tangent_loader_{ nullptr };
 
