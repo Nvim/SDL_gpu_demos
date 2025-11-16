@@ -7,7 +7,8 @@
 #include "common/logger.h"
 #include "common/types.h"
 #include "common/util.h"
-#include "shaders/debug_flags.h"
+#include "shaders/pbr_flags.h"
+#include "shaders/post_process_flags.h"
 
 #include <glm/gtc/constants.hpp>
 #include <imgui/backends/imgui_impl_sdl3.h>
@@ -82,7 +83,12 @@ CubeProgram::~CubeProgram()
   RELEASE_IF(hdr_color_target_, SDL_ReleaseGPUTexture);
   RELEASE_IF(post_processed_target_, SDL_ReleaseGPUTexture);
   RELEASE_IF(brdf_lut_, SDL_ReleaseGPUTexture);
+
   RELEASE_IF(post_process_pipeline, SDL_ReleaseGPUComputePipeline);
+
+  // for (u8 i = 0; i<3; ++i) {
+  RELEASE_IF(pbr_samplers_[0], SDL_ReleaseGPUSampler);
+  // }
   loader_.Release();
 
   LOG_DEBUG("Released GPU Resources");
@@ -252,7 +258,7 @@ CubeProgram::Draw()
     glm::vec4{ .9f, .9f, .9f, .1f },
     instance_cfg.spread,
     instance_cfg.dimension,
-    shader_debug_flags_,
+    pbr_debug_flags_,
   };
 
   ImGui_ImplSDLGPU3_PrepareDrawData(draw_data, cmdbuf);
@@ -322,11 +328,13 @@ CubeProgram::Draw()
       tex_bind.texture = post_processed_target_;
       tex_bind.cycle = true;
     }
-    SDL_GPUComputePass* pass =
-      SDL_BeginGPUComputePass(cmdbuf, &tex_bind, 1, nullptr, 0);
+    PostProcessDataBinding ubo = { postprocess_flags_ };
+
+    auto* pass = SDL_BeginGPUComputePass(cmdbuf, &tex_bind, 1, nullptr, 0);
 
     SDL_BindGPUComputePipeline(pass, post_process_pipeline);
     SDL_BindGPUComputeStorageTextures(pass, 0, &hdr_color_target_, 1);
+    SDL_PushGPUComputeUniformData(cmdbuf, 0, &ubo, sizeof(ubo));
     SDL_DispatchGPUCompute(pass, vp_width_ / 8, vp_height_ / 8, 1);
 
     SDL_EndGPUComputePass(pass);
@@ -500,7 +508,7 @@ CubeProgram::DrawGui()
       }
       if (ImGui::TreeNode("PBR Settings")) {
         // Each flag's name and the corresponding bit
-        static constexpr PbrFlag flags[] = {
+        static constexpr PbrFlag pbr_flags[] = {
           { "USE_DIFFUSE_TEX", USE_DIFFUSE_TEX },
           { "USE_VERTEX_COLOR", USE_VERTEX_COLOR },
           { "USE_NORMAL_TEX", USE_NORMAL_TEX },
@@ -514,24 +522,58 @@ CubeProgram::DrawGui()
           { "USE_IBL_SPECULAR", USE_IBL_SPECULAR },
           { "USE_IBL_DIFFUSE", USE_IBL_DIFFUSE },
           { "USE_POINTLIGHTS", USE_POINTLIGHTS },
-          { "USE_TONEMAPPING", USE_TONEMAPING },
-          { "USE_GAMMA_CORRECT", USE_GAMMA_CORRECT },
         };
 
         if (ImGui::Button("Disable all")) {
-          shader_debug_flags_ = 0;
+          pbr_debug_flags_ = 0;
         }
         if (ImGui::Button("Enable all")) {
-          shader_debug_flags_ = 0xFFFFFFFF;
+          pbr_debug_flags_ = 0xFFFFFFFF;
         }
 
-        for (const PbrFlag& flag : flags) {
-          bool flag_set = (shader_debug_flags_ & flag.flag_value) != 0;
+        for (const PbrFlag& flag : pbr_flags) {
+          bool flag_set = (pbr_debug_flags_ & flag.flag_value) != 0;
           if (ImGui::Checkbox(flag.label, &flag_set)) {
             if (flag_set) {
-              shader_debug_flags_ |= flag.flag_value;
+              pbr_debug_flags_ |= flag.flag_value;
             } else {
-              shader_debug_flags_ &= ~flag.flag_value;
+              pbr_debug_flags_ &= ~flag.flag_value;
+            }
+          }
+        }
+        ImGui::TreePop();
+      }
+      if (ImGui::TreeNode("Post Processing")) {
+        static constexpr PbrFlag post_flags[] = {
+          // { "USE_GAMMA_CORRECT", USE_GAMMA_CORRECT },
+          { "None", TONEMAP_NONE },
+          { "Reinhard", TONEMAP_REINHARD },
+          { "Reinhard Extended", TONEMAP_REINHARD_EXTENDED },
+          { "ACES", TONEMAP_ACES },
+          { "Hable", TONEMAP_HABLE },
+          { "Filmic", TONEMAP_FILMIC },
+        };
+
+        // Can be set along with others:
+        bool gamma_set = (postprocess_flags_ & USE_GAMMA_CORRECT) != 0;
+        if (ImGui::Checkbox("Gamma correction", &gamma_set)) {
+          if (gamma_set) {
+            postprocess_flags_ |= USE_GAMMA_CORRECT;
+          } else {
+            postprocess_flags_ &= ~USE_GAMMA_CORRECT;
+          }
+        }
+
+        // Tonemap flags are mutually exclusive
+        ImGui::Text("Tonemapping:\n");
+        for (const PbrFlag& flag : post_flags) {
+          bool flag_set = (postprocess_flags_ & flag.flag_value) != 0;
+          if (ImGui::Checkbox(flag.label, &flag_set)) {
+            if (flag_set) {
+              postprocess_flags_ =
+                (postprocess_flags_ & USE_GAMMA_CORRECT) | flag.flag_value;
+            } else {
+              postprocess_flags_ &= ~flag.flag_value;
             }
           }
         }
@@ -722,7 +764,7 @@ CubeProgram::CreatePostProcessPipeline()
     pipelineInfo.num_readonly_storage_buffers = 0;
     pipelineInfo.num_readwrite_storage_textures = 1;
     pipelineInfo.num_readwrite_storage_buffers = 0;
-    pipelineInfo.num_uniform_buffers = 0;
+    pipelineInfo.num_uniform_buffers = 1;
     pipelineInfo.threadcount_x = 16;
     pipelineInfo.threadcount_y = 16;
     pipelineInfo.threadcount_z = 1;

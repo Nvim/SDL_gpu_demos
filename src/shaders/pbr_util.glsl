@@ -1,5 +1,5 @@
 #include "material_features.h"
-#include "debug_flags.h"
+#include "pbr_flags.h"
 
 struct PointLight {
     vec3 world_pos;

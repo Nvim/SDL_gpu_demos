@@ -12,5 +12,3 @@
 #define USE_IBL_SPECULAR   (0x01 << 0x0A)
 #define USE_IBL_DIFFUSE    (0x01 << 0x0B)
 #define USE_POINTLIGHTS    (0x01 << 0x0C)
-#define USE_TONEMAPING     (0x01 << 0x0D)
-#define USE_GAMMA_CORRECT  (0x01 << 0x0E)

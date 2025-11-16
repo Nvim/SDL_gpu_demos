@@ -16,6 +16,8 @@
 #include "common/types.h"
 #include "common/util.h"
 
+#include "shaders/post_process_flags.h"
+
 struct Rotation
 {
   const char* name;
@@ -45,8 +47,14 @@ struct SceneDataBinding
   glm::vec4 sun_color;
   f32 spread;
   u32 dimension;
-  u32 debug_flags; // View 'shaders/debug_flags.h'
+  u32 pbr_flags; // View 'shaders/pbr_flags.h'
   f32 _pad[1] = { 0.f };
+};
+
+struct PostProcessDataBinding
+{
+  u32 flags; // View 'shaders/post_process_flags.h'
+  f32 _pad[3] = { 0.f };
 };
 
 struct DrawDataBinding
@@ -138,7 +146,8 @@ private:
   bool skybox_toggle_{ true };
   i32 tex_idx{ 0 };
   glm::vec3 light_pos_{ 10.f };
-  u32 shader_debug_flags_{ 0xFFFFFFFF };
+  u32 pbr_debug_flags_{ 0xFFFFFFFF };
+  u32 postprocess_flags_{ USE_GAMMA_CORRECT | TONEMAP_ACES };
 
   // GPU Resources:
   SDL_GPUTexture* depth_target_{ nullptr };

@@ -3,7 +3,7 @@
 #extension GL_GOOGLE_include_directive : require
 #include "scene_data.glsl"
 #include "pbr_util.glsl"
-#include "debug_flags.h"
+#include "pbr_flags.h"
 
 layout(location = 0) out vec4 OutFragColor;
 layout(location = 0) in vec3 inFragPos;
