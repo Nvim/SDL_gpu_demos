@@ -1,15 +1,17 @@
 #include <pch.h>
 
 #include "common/cubemap.h"
+#include "common/engine.h"
+#include "common/rendersystem.h"
 #include "common/unit_cube.h"
 #include "skybox.h"
 
 Skybox::Skybox(const std::filesystem::path path,
-               SDL_Window* window,
-               SDL_GPUDevice* device)
+               Engine* engine,
+               SDL_GPUTextureFormat framebuffer_format)
   : path_{ path }
-  , device_{ device }
-  , window_{ window }
+  , engine_{ engine }
+  , framebuffer_format_{ framebuffer_format }
 {
   if (!Init()) {
     LOG_ERROR("Skybox initialization failed");
@@ -19,13 +21,13 @@ Skybox::Skybox(const std::filesystem::path path,
 Skybox::Skybox(const std::filesystem::path path,
                const char* vert_path,
                const char* frag_path,
-               SDL_Window* window,
-               SDL_GPUDevice* device)
+               Engine* engine,
+               SDL_GPUTextureFormat framebuffer_format)
   : VertPath{ vert_path }
   , FragPath{ frag_path }
   , path_{ path }
-  , device_{ device }
-  , window_{ window }
+  , engine_{ engine }
+  , framebuffer_format_{ framebuffer_format }
 {
   if (!Init()) {
     LOG_ERROR("Skybox initialization failed");
@@ -35,7 +37,7 @@ Skybox::Skybox(const std::filesystem::path path,
 Skybox::~Skybox()
 {
   LOG_TRACE("Destroying Skybox");
-  auto* Device = device_;
+  auto* Device = engine_->Device;
   RELEASE_IF(Pipeline, SDL_ReleaseGPUGraphicsPipeline);
 }
 
@@ -52,11 +54,11 @@ Skybox::Init()
   // TODO: store loader instancees in engine
   ICubemapLoader* loader;
   if (std::filesystem::is_directory(path_)) {
-    loader = new MultifileCubemapLoader{ device_ };
+    loader = &engine_->MultifileCubemapLoader;
   } else if (path_.extension().compare(".hdr") == 0) {
-    loader = new ProjectionCubemapLoader{ device_ };
+    loader = &engine_->ProjectionCubemapLoader;
   } else {
-    loader = new KtxCubemapLoader{ device_ };
+    loader = &engine_->KtxCubemapLoader;
   }
 
   Cubemap = loader->Load(path_, CubeMapUsage::Skybox);
@@ -69,18 +71,6 @@ Skybox::Init()
     LOG_ERROR("Couldn't create skybox pipeline");
     return false;
   }
-  SDL_GPUBufferCreateInfo bufInfo{};
-  {
-    bufInfo.usage = SDL_GPU_BUFFERUSAGE_VERTEX;
-    bufInfo.size = sizeof(PosVertex) * 24;
-  }
-  VertexBuffer = SDL_CreateGPUBuffer(device_, &bufInfo);
-
-  {
-    bufInfo.usage = SDL_GPU_BUFFERUSAGE_INDEX;
-    bufInfo.size = sizeof(Uint16) * 36;
-  }
-  IndexBuffer = SDL_CreateGPUBuffer(device_, &bufInfo);
 
   SDL_GPUSamplerCreateInfo samplerInfo{};
   {
@@ -91,10 +81,18 @@ Skybox::Init()
     samplerInfo.address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
     samplerInfo.address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
   }
-  CubemapSampler = SDL_CreateGPUSampler(device_, &samplerInfo);
+  CubemapSampler = SDL_CreateGPUSampler(engine_->Device, &samplerInfo);
+  if (!CubemapSampler) {
+    LOG_ERROR("Couldn't create sampler");
+    return false;
+  }
 
-  if (!SendVertexData()) {
-    LOG_ERROR("couldn't send skybox vertex data");
+  if (!engine_->CreateAndUploadMeshBuffers(&Buffers,
+                                           UnitCube::Verts,
+                                           UnitCube::VertCount,
+                                           UnitCube::Indices,
+                                           UnitCube::IndexCount)) {
+    LOG_ERROR("Couldn't upload vertex data");
     return false;
   }
 
@@ -107,23 +105,19 @@ bool
 Skybox::CreatePipeline()
 {
   LOG_TRACE("Skybox::CreatePipeline");
-  auto vert = LoadShader(VertPath, device_, 0, 1, 0, 0);
+  auto vert = LoadShader(VertPath, engine_->Device, 0, 1, 0, 0);
   if (vert == nullptr) {
     LOG_ERROR("Couldn't load vertex shader at path {}", VertPath);
     return false;
   }
-  auto frag = LoadShader(FragPath, device_, 1, 1, 0, 0);
+  auto frag = LoadShader(FragPath, engine_->Device, 1, 1, 0, 0);
   if (frag == nullptr) {
     LOG_ERROR("Couldn't load fragment shader at path {}", FragPath);
     return false;
   }
 
   SDL_GPUColorTargetDescription col_desc = {};
-  col_desc.format = SDL_GetGPUSwapchainTextureFormat(device_, window_);
-  if (col_desc.format == SDL_GPU_TEXTUREFORMAT_INVALID) {
-    LOG_ERROR("no swapchain format");
-    return false;
-  }
+  col_desc.format = framebuffer_format_;
 
   SDL_GPUVertexBufferDescription vert_desc{};
   {
@@ -168,10 +162,11 @@ Skybox::CreatePipeline()
       state.enable_stencil_test = false;
     }
   }
-  Pipeline = SDL_CreateGPUGraphicsPipeline(device_, &pipelineCreateInfo);
+  Pipeline =
+    SDL_CreateGPUGraphicsPipeline(engine_->Device, &pipelineCreateInfo);
 
-  SDL_ReleaseGPUShader(device_, vert);
-  SDL_ReleaseGPUShader(device_, frag);
+  SDL_ReleaseGPUShader(engine_->Device, vert);
+  SDL_ReleaseGPUShader(engine_->Device, frag);
 
   auto ret = Pipeline != nullptr;
   if (ret) {
@@ -182,60 +177,13 @@ Skybox::CreatePipeline()
   return ret;
 }
 
-bool
-Skybox::SendVertexData() const
-{
-  LOG_TRACE("Skybox::SendVertexData");
-  Uint32 sz = (sizeof(PosVertex) * 24) + (sizeof(Uint16) * 36);
-  SDL_GPUTransferBufferCreateInfo trInfo{};
-  {
-    trInfo.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
-    trInfo.size = sz;
-  }
-  SDL_GPUTransferBuffer* trBuf = SDL_CreateGPUTransferBuffer(device_, &trInfo);
-
-  { // Transfer buffer
-    PosVertex* transferData =
-      (PosVertex*)SDL_MapGPUTransferBuffer(device_, trBuf, false);
-    Uint16* indexData = (Uint16*)&transferData[24];
-
-    SDL_memcpy(transferData, UnitCube::Verts, sizeof(UnitCube::Verts));
-    SDL_memcpy(indexData, UnitCube::Indices, sizeof(UnitCube::Indices));
-    SDL_UnmapGPUTransferBuffer(device_, trBuf);
-  }
-
-  SDL_GPUCommandBuffer* cmdbuf = SDL_AcquireGPUCommandBuffer(device_);
-
-  { // Copy pass
-    SDL_GPUCopyPass* copyPass = SDL_BeginGPUCopyPass(cmdbuf);
-
-    SDL_GPUTransferBufferLocation trLoc{ trBuf, 0 };
-    SDL_GPUBufferRegion vBufReg{ VertexBuffer, 0, sizeof(PosVertex) * 24 };
-    SDL_GPUBufferRegion iBufReg{ IndexBuffer, 0, sizeof(Uint16) * 36 };
-
-    SDL_UploadToGPUBuffer(copyPass, &trLoc, &vBufReg, false);
-    trLoc.offset = vBufReg.size;
-    SDL_UploadToGPUBuffer(copyPass, &trLoc, &iBufReg, false);
-    SDL_EndGPUCopyPass(copyPass);
-  }
-
-  SDL_ReleaseGPUTransferBuffer(device_, trBuf);
-  auto ret = SDL_SubmitGPUCommandBuffer(cmdbuf);
-  if (ret) {
-    LOG_DEBUG("Sent skybox vertex data to GPU");
-  } else {
-    LOG_ERROR("Couldn't submit command buffer for vertex transfer: {}", GETERR);
-  }
-  return ret;
-}
-
 void
 Skybox::Draw(SDL_GPURenderPass* pass) const
 {
   static const SDL_GPUTextureSamplerBinding texBind{ Cubemap->Texture,
                                                      CubemapSampler };
-  static const SDL_GPUBufferBinding vBufBind{ VertexBuffer, 0 };
-  static const SDL_GPUBufferBinding iBufBind{ IndexBuffer, 0 };
+  static const SDL_GPUBufferBinding vBufBind{ Buffers.VertexBuffer, 0 };
+  static const SDL_GPUBufferBinding iBufBind{ Buffers.IndexBuffer, 0 };
 
   SDL_BindGPUGraphicsPipeline(pass, Pipeline);
   SDL_BindGPUVertexBuffers(pass, 0, &vBufBind, 1);

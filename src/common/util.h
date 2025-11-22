@@ -5,53 +5,6 @@
 #include <SDL3/SDL_gpu.h>
 #include <type_traits>
 
-static constexpr size_t FLOAT4 = sizeof(glm::vec4);
-static constexpr size_t FLOAT3 = sizeof(glm::vec3);
-static constexpr size_t FLOAT2 = sizeof(glm::vec2);
-static_assert(FLOAT4 == 16);
-static_assert(FLOAT3 == 12);
-static_assert(FLOAT2 == 8);
-
-struct PosVertex
-{
-  float pos[3];
-};
-
-struct PosColVertex
-{
-  float poscol[6];
-};
-
-struct PosUvVertex
-{
-  float pos[3];
-  float uv[2];
-};
-
-struct PosNormalUvVertex
-{
-  glm::vec3 pos;
-  glm::vec3 normal{ 0.f };
-  glm::vec2 uv{ 0.f };
-};
-
-struct PosNormalColorUvVertex
-{
-  glm::vec3 pos;
-  glm::vec3 normal{ 0.f };
-  glm::vec2 uv{ 0.f };
-  glm::vec4 color{ 1.f };
-};
-
-struct PosNormalTangentColorUvVertex
-{
-  glm::vec3 pos;
-  glm::vec3 normal{ 0.f };
-  glm::vec4 tangent{ 0.f };
-  glm::vec2 uv{ 0.f };
-  glm::vec4 color{ 1.f };
-};
-
 static constexpr size_t PosNormalTangentColorUvAttributeCount = 5;
 static constexpr SDL_GPUVertexAttribute
   PosNormalTangentColorUvAttributes[PosNormalTangentColorUvAttributeCount] = {
@@ -109,3 +62,19 @@ static std::unordered_map<u32, SDL_GPUTextureFormat> VkToSDL_TextureFormat = {
   { 109, SDL_GPU_TEXTUREFORMAT_R32G32B32A32_FLOAT },
   { 97, SDL_GPU_TEXTUREFORMAT_R32G32B32A32_FLOAT },
 };
+
+#define DISABLE_COPY_AND_MOVE(ClassName)                                       \
+  ClassName(const ClassName&) = delete;                                        \
+  ClassName& operator=(const ClassName&) = delete;                             \
+  ClassName(ClassName&&) = delete;                                             \
+  ClassName& operator=(ClassName&&) = delete;
+
+#define DISABLE_COPY(ClassName)                                                \
+  ClassName(const ClassName&) = delete;                                        \
+  ClassName& operator=(const ClassName&) = delete;
+
+void
+disable_blending(SDL_GPUColorTargetDescription& d);
+
+void
+enable_blending(SDL_GPUColorTargetDescription& d);

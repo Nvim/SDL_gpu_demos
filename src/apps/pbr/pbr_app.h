@@ -14,7 +14,6 @@
 #include "common/skybox.h"
 #include "common/transform.h"
 #include "common/types.h"
-#include "common/util.h"
 
 #include "shaders/post_process_flags.h"
 
@@ -99,7 +98,11 @@ class CubeProgram : public Program
     SDL_GPU_TEXTUREFORMAT_R16G16B16A16_FLOAT;
 
 public:
-  CubeProgram(SDL_GPUDevice* device, SDL_Window* window, int w, int h);
+  CubeProgram(SDL_GPUDevice* device,
+              SDL_Window* window,
+              Engine* engine,
+              int w,
+              int h);
   bool Init() override;
   bool Poll() override;
   bool Draw() override;
@@ -126,8 +129,8 @@ private:
                   vp_width_ / (f32)vp_height_,
                   .1f,
                   100.f };
-  Skybox skybox_{ PBR_PATH / "skybox.hdr", Window, Device };
-  GLTFLoader loader_{ this, HDR_TARGET_FORMAT };
+  Skybox skybox_{ PBR_PATH / "skybox.hdr", EnginePtr, HDR_TARGET_FORMAT };
+  GLTFLoader loader_{ this->EnginePtr, HDR_TARGET_FORMAT };
   path default_scene_path_{
     MODELS_DIR / "DamagedHelmet/DamagedHelmetWithTangents.glb"
     // MODELS_DIR / "AlphaBlendModeTest.glb"

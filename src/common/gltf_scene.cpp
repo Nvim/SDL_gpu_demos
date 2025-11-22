@@ -2,6 +2,7 @@
 
 #include "gltf_scene.h"
 
+#include "common/engine.h"
 #include "common/gltf_loader.h"
 
 GLTFScene::GLTFScene(std::filesystem::path path, const GLTFLoader* loader)
@@ -22,7 +23,7 @@ GLTFScene::Release()
 {
   LOG_TRACE("Destroying GLTFScene");
   {
-    auto Device = loader_->program_->Device;
+    auto Device = loader_->engine_->Device;
     for (auto* tex : textures_) {
       if (tex != loader_->default_texture_) {
         RELEASE_IF(tex, SDL_ReleaseGPUTexture);

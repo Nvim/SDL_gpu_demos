@@ -4,7 +4,6 @@
 #include <glm/ext/vector_float3.hpp>
 
 #include <common/program.h>
-// #include <src/common/util.h>
 
 struct PaddedVertex
 {
@@ -17,7 +16,11 @@ struct PaddedVertex
 class BufferApp : public Program
 {
 public:
-  BufferApp(SDL_GPUDevice* device, SDL_Window* window, int w, int h);
+  BufferApp(SDL_GPUDevice* device,
+            SDL_Window* window,
+            Engine* engine,
+            int w,
+            int h);
   bool Init() override;
   bool Poll() override;
   bool Draw() override;

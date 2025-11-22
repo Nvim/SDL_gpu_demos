@@ -491,6 +491,7 @@ ProjectionCubemapLoader::Load(std::filesystem::path path,
     LOG_DEBUG("Loaded HDR texture `{}` as cubemap", path.c_str());
   }
 
+  SDL_ReleaseGPUSampler(device_, tex_sampler);
   SDL_ReleaseGPUTexture(device_, tex);
   return ret;
 }

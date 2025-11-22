@@ -48,3 +48,34 @@ LoadShader(const char* path,
   SDL_free(code);
   return shader;
 }
+
+/* *
+ * NOTE: If we just disable blending, alpha values below one can still
+ * be written to framebuffer. Blending is enabled to force alpha to always
+ * be one to avoid ImGUI's background showing behind framebuffer
+ * */
+void
+disable_blending(SDL_GPUColorTargetDescription& d)
+{
+  d.blend_state.enable_blend = true;
+  d.blend_state.color_blend_op = SDL_GPU_BLENDOP_ADD;
+  d.blend_state.dst_color_blendfactor = SDL_GPU_BLENDFACTOR_ZERO;
+  d.blend_state.src_color_blendfactor = SDL_GPU_BLENDFACTOR_ONE;
+
+  d.blend_state.alpha_blend_op = SDL_GPU_BLENDOP_ADD;
+  d.blend_state.src_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE;
+  d.blend_state.dst_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE;
+}
+
+void
+enable_blending(SDL_GPUColorTargetDescription& d)
+{
+  d.blend_state.enable_blend = true;
+  d.blend_state.color_blend_op = SDL_GPU_BLENDOP_ADD;
+  d.blend_state.dst_color_blendfactor = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+  d.blend_state.src_color_blendfactor = SDL_GPU_BLENDFACTOR_SRC_ALPHA;
+
+  d.blend_state.alpha_blend_op = SDL_GPU_BLENDOP_ADD;
+  d.blend_state.src_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE;
+  d.blend_state.dst_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE;
+}

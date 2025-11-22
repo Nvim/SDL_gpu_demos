@@ -1,22 +1,24 @@
 #pragma once
 
-#include "common/cubemap.h"
+#include "common/rendersystem.h"
 #include "common/types.h"
-#include "common/util.h"
 
 #include <SDL3/SDL_gpu.h>
+
+class Engine;
+struct Cubemap;
 
 class Skybox
 {
 public:
   explicit Skybox(const std::filesystem::path path,
-                  SDL_Window* window,
-                  SDL_GPUDevice* device);
+                  Engine* engine,
+                  SDL_GPUTextureFormat framebuffer_format);
   explicit Skybox(const std::filesystem::path path,
                   const char* vert_path,
                   const char* frag_path,
-                  SDL_Window* window,
-                  SDL_GPUDevice* device);
+                  Engine* engine,
+                  SDL_GPUTextureFormat framebuffer_format);
   ~Skybox();
 
   bool IsLoaded() const { return loaded_; }
@@ -29,18 +31,16 @@ public:
   const char* FragPath = FRAG_PATH;
   UniquePtr<Cubemap> Cubemap{};
   SDL_GPUSampler* CubemapSampler{};
-  SDL_GPUBuffer* VertexBuffer{};
-  SDL_GPUBuffer* IndexBuffer{};
+  MeshBuffers Buffers{};
   SDL_GPUGraphicsPipeline* Pipeline{ nullptr };
 
 private:
   bool Init();
   bool CreatePipeline();
-  bool SendVertexData() const;
 
 private:
   const std::filesystem::path path_{};
-  SDL_GPUDevice* device_{}; // needed for dtor
-  SDL_Window* window_{};    // needed swapchain format
+  Engine* engine_;
   bool loaded_{ false };
+  SDL_GPUTextureFormat framebuffer_format_;
 };

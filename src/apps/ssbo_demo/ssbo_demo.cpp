@@ -2,8 +2,12 @@
 
 #include "ssbo_demo.h"
 
-BufferApp::BufferApp(SDL_GPUDevice* device, SDL_Window* window, int w, int h)
-  : Program{ device, window }
+BufferApp::BufferApp(SDL_GPUDevice* device,
+                     SDL_Window* window,
+                     Engine* engine,
+                     int w,
+                     int h)
+  : Program{ device, window, engine }
   , vp_width_{ w }
   , vp_height_{ h }
 {

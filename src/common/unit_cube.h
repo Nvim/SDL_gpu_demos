@@ -2,7 +2,7 @@
 
 namespace UnitCube {
 // clang-format off
-static constexpr u8 VertCount = 24;
+static constexpr u32 VertCount = 24;
 static constexpr PosVertex Verts[VertCount] = {
   { {-1.f, -1.f, 1.f} },
   { { 1.f, -1.f, 1.f} },
@@ -35,7 +35,7 @@ static constexpr PosVertex Verts[VertCount] = {
   { { 1.f, -1.f,  1.f} },
 };
 
-static constexpr u16 IndexCount = 36;
+static constexpr u32 IndexCount = 36;
 static constexpr u16 Indices[IndexCount] = {
   0,  1,  2,  0,  2,  3,
   4,  5,  6,  4,  6,  7,

@@ -1,3 +1,4 @@
+#include "common/engine.h"
 #include "pch.h"
 #include <SDL3/SDL_video.h>
 
@@ -43,7 +44,12 @@ main()
   LOG_DEBUG("GPU claimed Window");
 
   { // app lifecycle
-    CubeProgram app{ Device, Window, 1200, 900 };
+    Engine engine{ Device, Window };
+    if (!engine.Init()) {
+      LOG_CRITICAL("Couldn't initialize engine");
+      return -1;
+    }
+    CubeProgram app{ Device, Window, &engine, 1200, 900 };
 
     if (!app.Init()) {
       LOG_CRITICAL("Couldn't init app.");

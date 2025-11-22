@@ -18,7 +18,7 @@ LoadedImage::BytesPerPixel()
   // Always assume 4 channels
   if (pixel_format == ImagePixelFormat::PIXELFORMAT_UINT) {
     // return 1 * nrChannels;
-    return 4 * 4;
+    return 1 * 4;
   }
   // return 4 * nrChannels;
   return 4 * 4;

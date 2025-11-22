@@ -1,6 +1,6 @@
 #pragma once
 
-#include <cstdint>
+#include "SDL3/SDL_gpu.h"
 #include <memory>
 
 using u8 = std::uint8_t;
@@ -36,3 +36,104 @@ MakeShared(U... args)
 
 template<typename T>
 using WeakPtr = std::weak_ptr<T>;
+
+static constexpr size_t FLOAT4 = sizeof(glm::vec4);
+static constexpr size_t FLOAT3 = sizeof(glm::vec3);
+static constexpr size_t FLOAT2 = sizeof(glm::vec2);
+static_assert(FLOAT4 == 16);
+static_assert(FLOAT3 == 12);
+static_assert(FLOAT2 == 8);
+
+struct PosVertex
+{
+  float pos[3];
+};
+
+struct PosColVertex
+{
+  float poscol[6];
+};
+
+struct PosUvVertex
+{
+  float pos[3];
+  float uv[2];
+};
+
+struct PosNormalUvVertex
+{
+  glm::vec3 pos;
+  glm::vec3 normal{ 0.f };
+  glm::vec2 uv{ 0.f };
+};
+
+struct PosNormalColorUvVertex
+{
+  glm::vec3 pos;
+  glm::vec3 normal{ 0.f };
+  glm::vec2 uv{ 0.f };
+  glm::vec4 color{ 1.f };
+};
+
+struct PosNormalTangentColorUvVertex
+{
+  glm::vec3 pos;
+  glm::vec3 normal{ 0.f };
+  glm::vec4 tangent{ 0.f };
+  glm::vec2 uv{ 0.f };
+  glm::vec4 color{ 1.f };
+};
+
+class TransferBufferWrapper
+{
+private:
+  SDL_GPUDevice* device_;
+  SDL_GPUTransferBuffer* buffer_;
+
+public:
+  SDL_GPUTransferBuffer* Get() const { return buffer_; }
+
+public:
+  // Movable, although i see no reason to
+  TransferBufferWrapper(const TransferBufferWrapper&) = delete;
+  TransferBufferWrapper& operator=(const TransferBufferWrapper&) = delete;
+
+  // TODO: handle download someday
+  explicit TransferBufferWrapper(SDL_GPUDevice* device, u32 size)
+    : device_{ device }
+  {
+    SDL_GPUTransferBufferCreateInfo info{};
+    info.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
+    info.size = size;
+    buffer_ = SDL_CreateGPUTransferBuffer(device_, &info);
+  }
+
+  ~TransferBufferWrapper()
+  {
+    if (buffer_) {
+      SDL_ReleaseGPUTransferBuffer(device_, buffer_);
+    }
+  }
+
+  TransferBufferWrapper(TransferBufferWrapper&& other) noexcept
+    : device_{ other.device_ }
+    , buffer_{ other.buffer_ }
+  {
+    other.buffer_ = nullptr;
+  }
+
+  TransferBufferWrapper& operator=(TransferBufferWrapper&& other) noexcept
+  {
+    if (this == &other) {
+      return *this;
+    }
+    if (this->buffer_) {
+      SDL_ReleaseGPUTransferBuffer(device_, this->buffer_);
+    }
+    device_ = other.device_;
+    buffer_ = other.buffer_;
+    other.buffer_ = nullptr;
+
+    return *this;
+  }
+};

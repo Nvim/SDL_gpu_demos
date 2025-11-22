@@ -4,6 +4,7 @@
 
 #include "common/camera.h"
 #include "common/cubemap.h"
+#include "common/engine.h"
 #include "common/logger.h"
 #include "common/types.h"
 #include "common/util.h"
@@ -17,9 +18,10 @@
 
 CubeProgram::CubeProgram(SDL_GPUDevice* device,
                          SDL_Window* window,
+                         Engine* engine,
                          int w,
                          int h)
-  : Program{ device, window }
+  : Program{ device, window, engine }
   , vp_width_{ w }
   , vp_height_{ h }
 {
@@ -415,6 +417,123 @@ CubeProgram::CreateSceneRenderTargets()
 }
 
 bool
+CubeProgram::LoadPbrTextures()
+{
+  auto loader = EnginePtr->KtxCubemapLoader;
+  irradiance_map_ =
+    loader.Load(IRRADIANCE_MAP_PATH, CubeMapUsage::IrradianceMap);
+  if (irradiance_map_ == nullptr) {
+    LOG_ERROR("Couldn't load irradiance map");
+    return false;
+  }
+  specular_map_ = loader.Load(SPECULAR_MAP_PATH, CubeMapUsage::SpecularMap);
+  if (specular_map_ == nullptr) {
+    LOG_ERROR("Couldn't load specular map");
+    return false;
+  }
+
+  { // Load BRDF LUT:
+    LoadedImage img{};
+    constexpr auto tex_format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM_SRGB;
+    auto type = ImageType::DIMENSIONS_2D;
+    auto f = ImagePixelFormat::PIXELFORMAT_UINT;
+    if (!ImageLoader::Load(img, BRDF_LUT_PATH, type, f)) {
+      LOG_ERROR("couldn't load brdf lut image");
+      return false;
+    }
+    SDL_GPUTextureCreateInfo tex_info{};
+    {
+      tex_info.type = SDL_GPU_TEXTURETYPE_2D;
+      tex_info.format = tex_format;
+      tex_info.height = img.h;
+      tex_info.width = img.w;
+      tex_info.layer_count_or_depth = 1;
+      tex_info.num_levels = 1;
+      tex_info.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER;
+      tex_info.sample_count = SDL_GPU_SAMPLECOUNT_1;
+    }
+    brdf_lut_ = SDL_CreateGPUTexture(Device, &tex_info);
+    if (!brdf_lut_) {
+      LOG_ERROR("Couldn't create texture: {}", GETERR);
+      return false;
+    }
+
+    // Upload:
+    if (!EnginePtr->UploadTo2DTexture(brdf_lut_, img)) {
+      LOG_ERROR("Couldn't load BRDF lookup texture");
+      return false;
+    }
+  }
+
+  { // Samplers:
+    SDL_GPUSampler* sampler{ nullptr };
+    SDL_GPUSamplerCreateInfo samplerInfo{};
+    {
+      samplerInfo.min_filter = SDL_GPU_FILTER_NEAREST;
+      samplerInfo.mag_filter = SDL_GPU_FILTER_NEAREST;
+      samplerInfo.mipmap_mode = SDL_GPU_SAMPLERMIPMAPMODE_NEAREST;
+      samplerInfo.address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
+      samplerInfo.address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
+    }
+    sampler = SDL_CreateGPUSampler(Device, &samplerInfo);
+    if (!sampler) {
+      LOG_ERROR("Couldn't create brdf LUT sampler, {}", GETERR);
+      return false;
+    }
+    for (u8 i = 0; i < 3; ++i) {
+      pbr_samplers_[i] = sampler;
+    }
+  }
+
+  return true;
+}
+
+bool
+CubeProgram::CreatePostProcessPipeline()
+{
+  LOG_TRACE("CubeProgram::CreatePostProcessPipeline");
+
+  u64 codeSize;
+  void* code = SDL_LoadFile(POST_PROCESS_PATH, &codeSize);
+  if (code == nullptr) {
+    LOG_ERROR("Couldn't load compute shader file: {}", GETERR);
+    return false;
+  }
+
+  SDL_GPUColorTargetDescription color_descs[1]{};
+  {
+    auto& d = color_descs[0];
+    d.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
+  }
+
+  SDL_GPUComputePipelineCreateInfo pipelineInfo{};
+  {
+    pipelineInfo.code = (u8*)code;
+    pipelineInfo.code_size = codeSize;
+    pipelineInfo.entrypoint = "main";
+    pipelineInfo.format = SDL_GPU_SHADERFORMAT_SPIRV;
+    pipelineInfo.num_samplers = 0;
+    pipelineInfo.num_readonly_storage_textures = 1;
+    pipelineInfo.num_readonly_storage_buffers = 0;
+    pipelineInfo.num_readwrite_storage_textures = 1;
+    pipelineInfo.num_readwrite_storage_buffers = 0;
+    pipelineInfo.num_uniform_buffers = 1;
+    pipelineInfo.threadcount_x = 16;
+    pipelineInfo.threadcount_y = 16;
+    pipelineInfo.threadcount_z = 1;
+  }
+
+  post_process_pipeline = SDL_CreateGPUComputePipeline(Device, &pipelineInfo);
+  SDL_free(code);
+
+  if (post_process_pipeline == nullptr) {
+    LOG_ERROR("Couldn't create compute pipeline: {}", GETERR);
+    return false;
+  }
+  return true;
+}
+
+bool
 CubeProgram::InitGui()
 {
   LOG_TRACE("CubeProgram::InitGui");
@@ -471,6 +590,15 @@ CubeProgram::DrawGui()
 
   // GUI stuff
   {
+    for (u8 i = 0; i < 4; ++i) {
+      ImGui::Text("[ ");
+      ImGui::SameLine();
+      for (u8 j = 0; j < 4; ++j) {
+        ImGui::Text("%f ", global_transform_.Matrix()[i][j]);
+        ImGui::SameLine();
+      }
+      ImGui::Text("]");
+    }
     if (ImGui::Begin("Scene")) {
       ImGui::Text("Hello world");
       ImGui::Image((ImTextureID)(intptr_t)post_processed_target_,
@@ -610,172 +738,4 @@ CubeProgram::DrawGui()
 
   ImGui::Render();
   return ImGui::GetDrawData();
-}
-
-bool
-CubeProgram::LoadPbrTextures()
-{
-  KtxCubemapLoader loader(Device);
-  irradiance_map_ =
-    loader.Load(IRRADIANCE_MAP_PATH, CubeMapUsage::IrradianceMap);
-  if (irradiance_map_ == nullptr) {
-    LOG_ERROR("Couldn't load irradiance map");
-    return false;
-  }
-  specular_map_ = loader.Load(SPECULAR_MAP_PATH, CubeMapUsage::SpecularMap);
-  if (specular_map_ == nullptr) {
-    LOG_ERROR("Couldn't load specular map");
-    return false;
-  }
-
-  {
-    LoadedImage img{};
-    constexpr auto tex_format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM_SRGB;
-    { // Load texture data to cpu and create texture
-      auto type = ImageType::DIMENSIONS_2D;
-      auto f = ImagePixelFormat::PIXELFORMAT_UINT;
-      if (!ImageLoader::Load(img, BRDF_LUT_PATH, type, f)) {
-        LOG_ERROR("couldn't load brdf lut image");
-        return false;
-      }
-      SDL_GPUTextureCreateInfo tex_info{};
-      {
-        tex_info.type = SDL_GPU_TEXTURETYPE_2D;
-        tex_info.format = tex_format;
-        tex_info.height = img.h;
-        tex_info.width = img.w;
-        tex_info.layer_count_or_depth = 1;
-        tex_info.num_levels = 1;
-        tex_info.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER;
-        tex_info.sample_count = SDL_GPU_SAMPLECOUNT_1;
-        // tex_info.props = ;
-      }
-      brdf_lut_ = SDL_CreateGPUTexture(Device, &tex_info);
-      if (!brdf_lut_) {
-        LOG_ERROR("Couldn't create texture: {}", GETERR);
-        return false;
-      }
-    }
-
-    SDL_GPUSampler* sampler{ nullptr };
-    {
-      SDL_GPUSamplerCreateInfo samplerInfo{};
-      {
-        samplerInfo.min_filter = SDL_GPU_FILTER_NEAREST;
-        samplerInfo.mag_filter = SDL_GPU_FILTER_NEAREST;
-        samplerInfo.mipmap_mode = SDL_GPU_SAMPLERMIPMAPMODE_NEAREST;
-        samplerInfo.address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
-        samplerInfo.address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
-      }
-      sampler = SDL_CreateGPUSampler(Device, &samplerInfo);
-      if (!sampler) {
-        LOG_ERROR("Couldn't create brdf LUT sampler, {}", GETERR);
-        return false;
-      }
-      for (u8 i = 0; i < 3; ++i) {
-        pbr_samplers_[i] = sampler;
-      }
-    }
-
-    SDL_GPUTransferBuffer* trBuf;
-    { // Memcpy data from cpu -> transfer buffer
-      SDL_GPUTransferBufferCreateInfo info{};
-      {
-        info.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
-        info.size = img.DataSize();
-      };
-      trBuf = SDL_CreateGPUTransferBuffer(Device, &info);
-      if (!trBuf) {
-        SDL_ReleaseGPUTexture(Device, brdf_lut_);
-        LOG_ERROR("couldn't create GPU transfer buffer: {}", GETERR);
-        return false;
-      }
-      u8* mapped = (u8*)SDL_MapGPUTransferBuffer(Device, trBuf, false);
-      if (!mapped) {
-        SDL_ReleaseGPUTexture(Device, brdf_lut_);
-        SDL_ReleaseGPUTransferBuffer(Device, trBuf);
-        LOG_ERROR("couldn't get transfer buffer mapping: {}", GETERR);
-        return false;
-      }
-      SDL_memcpy(mapped, img.data, img.DataSize());
-      SDL_UnmapGPUTransferBuffer(Device, trBuf);
-    }
-
-    SDL_GPUCommandBuffer* cmdbuf = SDL_AcquireGPUCommandBuffer(Device);
-    if (cmdbuf == NULL) {
-      LOG_ERROR("Couldn't acquire command buffer: {}", GETERR);
-      return false;
-    }
-
-    { // Copy pass transfer buffer -> GPU texture
-      SDL_GPUTextureTransferInfo tex_transfer_info{};
-      {
-        tex_transfer_info.transfer_buffer = trBuf;
-        tex_transfer_info.offset = 0;
-      }
-      SDL_GPUTextureRegion tex_reg{};
-      {
-        tex_reg.texture = brdf_lut_;
-        tex_reg.w = img.w;
-        tex_reg.h = img.h;
-        tex_reg.d = 1;
-      }
-      SDL_GPUCopyPass* copyPass = SDL_BeginGPUCopyPass(cmdbuf);
-      SDL_UploadToGPUTexture(copyPass, &tex_transfer_info, &tex_reg, false);
-
-      SDL_EndGPUCopyPass(copyPass);
-    }
-    SDL_ReleaseGPUTransferBuffer(Device, trBuf);
-
-    if (!SDL_SubmitGPUCommandBuffer(cmdbuf)) {
-      LOG_ERROR("couldn't submit command buffer: {}", GETERR);
-      return false;
-    }
-  }
-  return true;
-}
-
-bool
-CubeProgram::CreatePostProcessPipeline()
-{
-  LOG_TRACE("CubeProgram::CreatePostProcessPipeline");
-
-  u64 codeSize;
-  void* code = SDL_LoadFile(POST_PROCESS_PATH, &codeSize);
-  if (code == nullptr) {
-    LOG_ERROR("Couldn't load compute shader file: {}", GETERR);
-    return false;
-  }
-
-  SDL_GPUColorTargetDescription color_descs[1]{};
-  {
-    auto& d = color_descs[0];
-    d.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
-  }
-
-  SDL_GPUComputePipelineCreateInfo pipelineInfo{};
-  {
-    pipelineInfo.code = (u8*)code;
-    pipelineInfo.code_size = codeSize;
-    pipelineInfo.entrypoint = "main";
-    pipelineInfo.format = SDL_GPU_SHADERFORMAT_SPIRV;
-    pipelineInfo.num_samplers = 0;
-    pipelineInfo.num_readonly_storage_textures = 1;
-    pipelineInfo.num_readonly_storage_buffers = 0;
-    pipelineInfo.num_readwrite_storage_textures = 1;
-    pipelineInfo.num_readwrite_storage_buffers = 0;
-    pipelineInfo.num_uniform_buffers = 1;
-    pipelineInfo.threadcount_x = 16;
-    pipelineInfo.threadcount_y = 16;
-    pipelineInfo.threadcount_z = 1;
-  }
-
-  post_process_pipeline = SDL_CreateGPUComputePipeline(Device, &pipelineInfo);
-  SDL_free(code);
-
-  if (post_process_pipeline == nullptr) {
-    LOG_ERROR("Couldn't create compute pipeline: {}", GETERR);
-    return false;
-  }
-  return true;
 }

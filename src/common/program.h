@@ -4,6 +4,8 @@
 #include <SDL3/SDL_gpu.h>
 #include <SDL3/SDL_timer.h>
 
+class Engine;
+
 // Program uses SDL GPU and Window to draw, but isn't responsible for
 // creating/releasing them.
 class Program
@@ -11,14 +13,16 @@ class Program
 public:
   SDL_GPUDevice* Device;
   SDL_Window* Window;
+  Engine* EnginePtr;
   f32 DeltaTime{ 0.0f };
   f32 lastTime{ 0.0f };
   // static inline std::shared_ptr<spdlog::logger> s_app_logger{};
 
 public:
-  Program(SDL_GPUDevice* device, SDL_Window* window)
+  Program(SDL_GPUDevice* device, SDL_Window* window, Engine* engine)
     : Device{ device }
-    , Window{ window } {};
+    , Window{ window }
+    , EnginePtr{ engine } {};
   ~Program() {};
 
   virtual bool Init() = 0;

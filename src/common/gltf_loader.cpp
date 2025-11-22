@@ -2,6 +2,7 @@
 
 #include "common/gltf_loader.h"
 
+#include "common/engine.h"
 #include "common/loaded_image.h"
 #include "common/logger.h"
 #include "common/material.h"
@@ -59,8 +60,8 @@ extract_mipmap_mode(fastgltf::Filter filter)
 
 }
 
-GLTFLoader::GLTFLoader(Program* program)
-  : program_{ program }
+GLTFLoader::GLTFLoader(Engine* engine)
+  : engine_{ engine }
 {
 
   tangent_loader_ = std::make_unique<OGLDevTangentLoader>();
@@ -81,9 +82,8 @@ GLTFLoader::GLTFLoader(Program* program)
   CreateDefaultMaterial();
 }
 
-GLTFLoader::GLTFLoader(Program* program,
-                       SDL_GPUTextureFormat framebuffer_format)
-  : GLTFLoader{ program }
+GLTFLoader::GLTFLoader(Engine* engine, SDL_GPUTextureFormat framebuffer_format)
+  : GLTFLoader{ engine }
 {
   framebuffer_format_ = framebuffer_format;
 }
@@ -93,7 +93,7 @@ GLTFLoader::IsInitialized()
 {
   // clang-format off
   return (
-    program_ != nullptr &&
+    engine_ != nullptr &&
     tangent_loader_ != nullptr &&
     opaque_pipeline_ != nullptr &&
     transparent_pipeline_ != nullptr &&
@@ -114,9 +114,9 @@ GLTFLoader::Release()
 {
   LOG_TRACE("GLTFLoader::Release");
 
-  auto Device = program_->Device;
-  RELEASE_IF(default_texture_, SDL_ReleaseGPUTexture);
-  RELEASE_IF(default_sampler_, SDL_ReleaseGPUSampler);
+  auto Device = engine_->Device;
+  RELEASE_IF(transparent_pipeline_, SDL_ReleaseGPUGraphicsPipeline);
+  RELEASE_IF(opaque_pipeline_, SDL_ReleaseGPUGraphicsPipeline);
 
   LOG_DEBUG("Released GLTFLoader resources");
 }
@@ -387,7 +387,11 @@ GLTFLoader::LoadVertexData(GLTFScene* ret)
       }
       tangent_loader_->Load(&buffers);
     }
-    if (!UploadBuffers(&newMesh.Buffers, vertices, indices)) {
+    if (!engine_->CreateAndUploadMeshBuffers(&newMesh.Buffers,
+                                             vertices.data(),
+                                             vertices.size(),
+                                             indices.data(),
+                                             indices.size())) {
       LOG_ERROR("Couldn't upload mesh data");
       return false;
     }
@@ -438,13 +442,11 @@ GLTFLoader::LoadTexture(GLTFScene* ret, u64 texture_index, bool srgb)
     if (imgData.data) {
       LOG_DEBUG("Creating texture");
       tex = CreateAndUploadTexture(imgData, srgb);
-      // stbi_image_free(imgData.data);
     }
     if (!tex) {
       LOG_WARN("Falling back to default textue");
       tex = default_texture_;
     }
-    // ret->textures_.push_back(tex);
     ret->textures_[texture_index] = tex;
   }
   return true;
@@ -516,7 +518,6 @@ SDL_GPUTexture*
 GLTFLoader::CreateAndUploadTexture(LoadedImage& img, bool srgb)
 {
   LOG_TRACE("GLTFLoader::CreateAndUploadTexture");
-  auto device = program_->Device;
   auto format = srgb ? SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM_SRGB
                      : SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
 
@@ -530,68 +531,17 @@ GLTFLoader::CreateAndUploadTexture(LoadedImage& img, bool srgb)
     tex_info.num_levels = 1;
     tex_info.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER;
   }
-  auto* tex = SDL_CreateGPUTexture(device, &tex_info);
+  auto* tex = SDL_CreateGPUTexture(engine_->Device, &tex_info);
   if (!tex) {
     LOG_ERROR("Couldn't create texture: {}", SDL_GetError());
     return tex;
   }
 
-// TODO: raii containers for sdl resources please please please
-#define ERR                                                                    \
-  SDL_ReleaseGPUTexture(device, tex);                                          \
-  return nullptr;
-  SDL_GPUTransferBufferCreateInfo tr_info{};
-  {
-    tr_info.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
-    tr_info.size = (Uint32)img.w * (Uint32)img.h * 4;
-  };
-  SDL_GPUTransferBuffer* trBuf = SDL_CreateGPUTransferBuffer(device, &tr_info);
-  if (!trBuf) {
-    LOG_ERROR("Couldn't create transfer buffer: {}", SDL_GetError);
-    ERR
+  if (!engine_->UploadTo2DTexture(tex, img)) {
+    LOG_ERROR("Couldn't create texture: upload failed");
+    return nullptr;
   }
 
-  void* memory = SDL_MapGPUTransferBuffer(device, trBuf, false);
-  if (!memory) {
-    LOG_ERROR("Couldn't map texture memory: {}", SDL_GetError());
-    SDL_ReleaseGPUTransferBuffer(device, trBuf);
-    ERR
-  }
-  SDL_memcpy(memory, img.data, img.w * img.h * 4);
-  SDL_UnmapGPUTransferBuffer(device, trBuf);
-
-  SDL_GPUTextureTransferInfo tex_transfer_info{};
-  tex_transfer_info.transfer_buffer = trBuf;
-  tex_transfer_info.offset = 0;
-
-  SDL_GPUTextureRegion tex_reg{};
-  {
-    tex_reg.texture = tex;
-    tex_reg.w = (Uint32)img.w;
-    tex_reg.h = (Uint32)img.h;
-    tex_reg.d = 1;
-  }
-
-  {
-    SDL_GPUCommandBuffer* cmdBuf = SDL_AcquireGPUCommandBuffer(device);
-    if (!cmdBuf) {
-      LOG_ERROR("Couldn't acquire command buffer: {}", SDL_GetError());
-      SDL_ReleaseGPUTransferBuffer(device, trBuf);
-      ERR
-    }
-    SDL_GPUCopyPass* copyPass = SDL_BeginGPUCopyPass(cmdBuf);
-    SDL_UploadToGPUTexture(copyPass, &tex_transfer_info, &tex_reg, false);
-
-    SDL_EndGPUCopyPass(copyPass);
-    if (!SDL_SubmitGPUCommandBuffer(cmdBuf)) {
-      LOG_ERROR("Couldn't sumbit command buffer: {}", SDL_GetError());
-      SDL_ReleaseGPUTransferBuffer(device, trBuf);
-      ERR
-    }
-    SDL_ReleaseGPUTransferBuffer(device, trBuf);
-  }
-#undef ERR
-  LOG_DEBUG("Created texture and uploaded image data successfully");
   return tex;
 }
 
@@ -622,7 +572,7 @@ GLTFLoader::LoadSamplers(GLTFScene* ret)
       info.address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_REPEAT;
       info.address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_REPEAT;
     }
-    auto* s = SDL_CreateGPUSampler(program_->Device, &info);
+    auto* s = SDL_CreateGPUSampler(engine_->Device, &info);
     if (!s) {
       LOG_ERROR("Couldn't create gpu sampler: {}", SDL_GetError());
       s = default_sampler_;
@@ -640,22 +590,8 @@ GLTFLoader::CreateDefaultSampler()
   if (default_sampler_) {
     LOG_DEBUG("Skipping default sampler recreation");
   }
-  static SDL_GPUSamplerCreateInfo sampler_info{};
-  { // Matches GLTF default spec. Linear mipmap + linear filter = trilinear
-    // filtering
-    sampler_info.min_filter = SDL_GPU_FILTER_LINEAR;
-    sampler_info.mag_filter = SDL_GPU_FILTER_LINEAR;
-    sampler_info.mipmap_mode = SDL_GPU_SAMPLERMIPMAPMODE_LINEAR;
-    sampler_info.address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_REPEAT;
-    sampler_info.address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_REPEAT;
-    sampler_info.address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_REPEAT;
-  }
-  SDL_GPUSampler* s = SDL_CreateGPUSampler(program_->Device, &sampler_info);
-  if (!s) {
-    LOG_ERROR("Default sampler creation failed: {}", SDL_GetError());
-    return false;
-  }
-  default_sampler_ = s;
+  default_sampler_ = engine_->LinearRepeatSampler();
+  assert(default_sampler_);
   return true;
 }
 
@@ -668,50 +604,8 @@ GLTFLoader::CreateDefaultTexture()
     return true;
   }
 
-  { // Create texture
-    SDL_GPUTextureCreateInfo tex_info{};
-    {
-      tex_info.type = SDL_GPU_TEXTURETYPE_2D;
-      tex_info.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
-      tex_info.width = 32;
-      tex_info.height = 32;
-      tex_info.layer_count_or_depth = 1;
-      tex_info.num_levels = 1;
-      tex_info.usage =
-        SDL_GPU_TEXTUREUSAGE_SAMPLER | SDL_GPU_TEXTUREUSAGE_COLOR_TARGET;
-    }
-    SDL_GPUTexture* t = SDL_CreateGPUTexture(program_->Device, &tex_info);
-
-    if (!t) {
-      LOG_ERROR("Default texture creation failed: {}", SDL_GetError());
-      return false;
-    }
-    default_texture_ = t;
-  }
-
-  { // Clear texture
-    SDL_GPUColorTargetInfo colorInfo{};
-    {
-      colorInfo.texture = default_texture_;
-      colorInfo.clear_color = { 0.8f, 0.1f, 0.8f, 1.0f };
-      colorInfo.load_op = SDL_GPU_LOADOP_CLEAR;
-      colorInfo.store_op = SDL_GPU_STOREOP_STORE;
-    };
-    auto* cmdbuf = SDL_AcquireGPUCommandBuffer(program_->Device);
-    if (!cmdbuf) {
-      LOG_ERROR("Couldn't acquire command buffer: {}", SDL_GetError());
-      return false;
-    }
-    SDL_GPURenderPass* renderPass =
-      SDL_BeginGPURenderPass(cmdbuf, &colorInfo, 1, NULL);
-    SDL_EndGPURenderPass(renderPass);
-
-    if (!SDL_SubmitGPUCommandBuffer(cmdbuf)) {
-      LOG_ERROR("Couldn't submit command buffer: {}", SDL_GetError());
-      return false;
-    }
-  }
-
+  default_texture_ = engine_->DefaultTexture();
+  assert(default_texture_);
   return true;
 }
 
@@ -893,41 +787,10 @@ GLTFLoader::CreateDefaultMaterial()
   default_material_ = std::make_shared<GLTFPbrMaterial>();
 }
 
-/* *
- * NOTE: If we just disable blending, alpha values below one can still
- * be written to framebuffer. Blending is enabled to force alpha to always
- * be one to avoid ImGUI's background showing behind framebuffer
- * */
-static void
-disable_blending(SDL_GPUColorTargetDescription& d)
-{
-  d.blend_state.enable_blend = true;
-  d.blend_state.color_blend_op = SDL_GPU_BLENDOP_ADD;
-  d.blend_state.dst_color_blendfactor = SDL_GPU_BLENDFACTOR_ZERO;
-  d.blend_state.src_color_blendfactor = SDL_GPU_BLENDFACTOR_ONE;
-
-  d.blend_state.alpha_blend_op = SDL_GPU_BLENDOP_ADD;
-  d.blend_state.src_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE;
-  d.blend_state.dst_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE;
-}
-
-static void
-enable_blending(SDL_GPUColorTargetDescription& d)
-{
-  d.blend_state.enable_blend = true;
-  d.blend_state.color_blend_op = SDL_GPU_BLENDOP_ADD;
-  d.blend_state.dst_color_blendfactor = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
-  d.blend_state.src_color_blendfactor = SDL_GPU_BLENDFACTOR_SRC_ALPHA;
-
-  d.blend_state.alpha_blend_op = SDL_GPU_BLENDOP_ADD;
-  d.blend_state.src_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE;
-  d.blend_state.dst_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE;
-}
-
 bool
 GLTFLoader::CreatePipelines()
 {
-  auto Device = program_->Device;
+  auto Device = engine_->Device;
 
   SDL_GPUShader* vs{ nullptr };
   SDL_GPUShader* fs{ nullptr };
@@ -957,7 +820,7 @@ GLTFLoader::CreatePipelines()
   SDL_GPUColorTargetDescription color_descs[1]{};
   {
     auto& d = color_descs[0];
-    d.format = SDL_GPU_TEXTUREFORMAT_R16G16B16A16_FLOAT;
+    d.format = framebuffer_format_;
     disable_blending(d);
   }
 
@@ -1020,5 +883,7 @@ GLTFLoader::CreatePipelines()
     LOG_ERROR("Couldn't create pipeline!");
     return false;
   }
+  SDL_ReleaseGPUShader(Device, fs);
+  SDL_ReleaseGPUShader(Device, vs);
   return true;
 }

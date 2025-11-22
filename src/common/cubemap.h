@@ -45,7 +45,6 @@ public:
 
 private:
   SDL_GPUDevice* device_{};
-  // TODO: hdr extension support
   const char* paths_[6]{ "left.jpg",   "right.jpg", "top.jpg",
                          "bottom.jpg", "back.jpg",  "front.jpg" };
 };
