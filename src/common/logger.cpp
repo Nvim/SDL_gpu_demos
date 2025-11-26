@@ -16,5 +16,8 @@ Logger::Init()
 spdlog::logger&
 Logger::Get()
 {
+  if (!logger_) {
+    Init();
+  }
   return *logger_;
 }

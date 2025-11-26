@@ -6,6 +6,7 @@
 #include "common/loaded_image.h"
 #include "common/logger.h"
 #include "common/material.h"
+#include "common/pipeline_builder.h"
 #include "common/rendersystem.h"
 #include "common/tangent_loader.h"
 #include "common/types.h"
@@ -817,69 +818,28 @@ GLTFLoader::CreatePipelines()
     }
   }
 
-  SDL_GPUColorTargetDescription color_descs[1]{};
-  {
-    auto& d = color_descs[0];
-    d.format = framebuffer_format_;
-    disable_blending(d);
-  }
+  PipelineBuilder builder{};
+  builder //
+    .AddColorTarget(framebuffer_format_, false)
+    .SetVertexShader(vs)
+    .SetFragmentShader(fs)
+    .SetPrimitiveType(SDL_GPU_PRIMITIVETYPE_TRIANGLELIST)
+    .AddVertexAttributes(PosNormalTangentColorUvAttrs)
+    .EnableDepthTest()
+    .SetCompareOp(SDL_GPU_COMPAREOP_LESS)
+    .EnableDepthWrite(SDL_GPU_TEXTUREFORMAT_D16_UNORM);
 
-  SDL_GPUVertexBufferDescription vertex_desc[] = { {
-    .slot = 0,
-    .pitch = sizeof(PosNormalTangentColorUvVertex),
-    .input_rate = SDL_GPU_VERTEXINPUTRATE_VERTEX,
-    .instance_step_rate = 0,
-  } };
-
-  SDL_GPUGraphicsPipelineCreateInfo pipelineCreateInfo{};
-  {
-    pipelineCreateInfo.vertex_shader = vs;
-    pipelineCreateInfo.fragment_shader = fs;
-    pipelineCreateInfo.primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;
-    {
-      auto& state = pipelineCreateInfo.vertex_input_state;
-      state.vertex_buffer_descriptions = vertex_desc;
-      state.num_vertex_buffers = 1;
-      state.vertex_attributes = PosNormalTangentColorUvAttributes;
-      state.num_vertex_attributes = PosNormalTangentColorUvAttributeCount;
-    }
-    {
-      auto& state = pipelineCreateInfo.rasterizer_state;
-      state.fill_mode = SDL_GPU_FILLMODE_FILL,
-      state.cull_mode = SDL_GPU_CULLMODE_NONE;
-      state.front_face = SDL_GPU_FRONTFACE_COUNTER_CLOCKWISE;
-    }
-    {
-      auto& state = pipelineCreateInfo.depth_stencil_state;
-      state.compare_op = SDL_GPU_COMPAREOP_LESS;
-      state.enable_depth_test = true;
-      state.enable_depth_write = true;
-      state.enable_stencil_test = false;
-    }
-    {
-      auto& info = pipelineCreateInfo.target_info;
-      info.color_target_descriptions = color_descs;
-      info.num_color_targets = 1;
-      info.depth_stencil_format = SDL_GPU_TEXTUREFORMAT_D16_UNORM;
-      info.has_depth_stencil_target = true;
-    }
-  }
-
-  opaque_pipeline_ = SDL_CreateGPUGraphicsPipeline(Device, &pipelineCreateInfo);
+  opaque_pipeline_ = builder.Build(Device);
   if (opaque_pipeline_ == nullptr) {
     LOG_ERROR("Couldn't create pipeline!");
     return false;
   }
 
-  { // Enable blending
-    auto& d = color_descs[0];
-    enable_blending(d);
-    // Transparent objects don't write to depth buffer
-    pipelineCreateInfo.depth_stencil_state.enable_depth_write = false;
-  }
-  transparent_pipeline_ =
-    SDL_CreateGPUGraphicsPipeline(Device, &pipelineCreateInfo);
-  if (opaque_pipeline_ == nullptr) {
+  enable_blending(builder.color_descs[0]);
+  builder.pipeline_info.depth_stencil_state.enable_depth_write = false;
+
+  transparent_pipeline_ = builder.Build(Device);
+  if (transparent_pipeline_ == nullptr) {
     LOG_ERROR("Couldn't create pipeline!");
     return false;
   }

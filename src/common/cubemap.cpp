@@ -1,6 +1,7 @@
 #include "cubemap.h"
 #include "common/loaded_image.h"
 #include "common/logger.h"
+#include "common/pipeline_builder.h"
 #include "common/types.h"
 #include "common/unit_cube.h"
 
@@ -511,52 +512,14 @@ ProjectionCubemapLoader::CreatePipeline()
     return false;
   }
 
-  SDL_GPUColorTargetDescription col_desc = {};
-  // Assumes the image is hdr
-  col_desc.format = SDL_GPU_TEXTUREFORMAT_R32G32B32A32_FLOAT;
-
-  SDL_GPUVertexBufferDescription vert_desc{};
-  {
-    vert_desc.slot = 0;
-    vert_desc.input_rate = SDL_GPU_VERTEXINPUTRATE_VERTEX;
-    vert_desc.instance_step_rate = 0;
-    vert_desc.pitch = sizeof(PosVertex);
-  }
-
-  SDL_GPUVertexAttribute vert_attr{};
-  {
-    vert_attr.buffer_slot = 0;
-    vert_attr.format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3;
-    vert_attr.location = 0;
-    vert_attr.offset = 0;
-  }
-
-  SDL_GPUGraphicsPipelineCreateInfo pipelineCreateInfo = {};
-  {
-    pipelineCreateInfo.vertex_shader = vert;
-    pipelineCreateInfo.fragment_shader = frag;
-    pipelineCreateInfo.primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;
-    {
-      auto& state = pipelineCreateInfo.vertex_input_state;
-      state.vertex_buffer_descriptions = &vert_desc;
-      state.num_vertex_buffers = 1;
-      state.vertex_attributes = &vert_attr;
-      state.num_vertex_attributes = 1;
-    }
-    {
-      auto& state = pipelineCreateInfo.target_info;
-      state.color_target_descriptions = &col_desc;
-      state.num_color_targets = 1;
-      state.has_depth_stencil_target = false;
-    }
-    {
-      auto& state = pipelineCreateInfo.depth_stencil_state;
-      state.enable_depth_test = false;
-      state.enable_depth_write = false;
-      state.enable_stencil_test = false;
-    }
-  }
-  Pipeline = SDL_CreateGPUGraphicsPipeline(device_, &pipelineCreateInfo);
+  PipelineBuilder builder{};
+  builder //
+    .AddColorTarget(SDL_GPU_TEXTUREFORMAT_R32G32B32A32_FLOAT, false)
+    .SetVertexShader(vert)
+    .SetFragmentShader(frag)
+    .SetPrimitiveType(SDL_GPU_PRIMITIVETYPE_TRIANGLELIST)
+    .AddVertexAttribute(SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3);
+  Pipeline = builder.Build(device_);
 
   SDL_ReleaseGPUShader(device_, vert);
   SDL_ReleaseGPUShader(device_, frag);

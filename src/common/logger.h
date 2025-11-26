@@ -11,7 +11,7 @@ public:
   static spdlog::logger& Get();
 
 private:
-  static inline std::shared_ptr<spdlog::logger> logger_;
+  static inline std::shared_ptr<spdlog::logger> logger_{ nullptr };
 };
 
 #define LOG_TRACE(...) Logger::Get().trace(__VA_ARGS__);

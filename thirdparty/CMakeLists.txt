@@ -1,6 +1,7 @@
 include(stb.cmake)
 include(ktx.cmake)
 include(sdl.cmake)
+include(catch2.cmake)
 
 # Imgui
 add_library(imgui)

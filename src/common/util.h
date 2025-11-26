@@ -30,6 +30,13 @@ static constexpr SDL_GPUVertexAttribute
       .offset = 2 * FLOAT3 + FLOAT4 + FLOAT2 },
   };
 
+static constexpr std::array<SDL_GPUVertexElementFormat, 5>
+  PosNormalTangentColorUvAttrs = {
+    SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3, SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3,
+    SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4, SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2,
+    SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4,
+  };
+
 static_assert((2 * FLOAT3 + FLOAT4 + FLOAT2 + FLOAT4) ==
               sizeof(PosNormalTangentColorUvVertex));
 
@@ -78,3 +85,6 @@ disable_blending(SDL_GPUColorTargetDescription& d);
 
 void
 enable_blending(SDL_GPUColorTargetDescription& d);
+
+u32
+vertex_attribute_size(SDL_GPUVertexElementFormat f);

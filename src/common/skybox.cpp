@@ -2,6 +2,7 @@
 
 #include "common/cubemap.h"
 #include "common/engine.h"
+#include "common/pipeline_builder.h"
 #include "common/rendersystem.h"
 #include "common/unit_cube.h"
 #include "skybox.h"
@@ -116,54 +117,24 @@ Skybox::CreatePipeline()
     return false;
   }
 
-  SDL_GPUColorTargetDescription col_desc = {};
-  col_desc.format = framebuffer_format_;
-
-  SDL_GPUVertexBufferDescription vert_desc{};
+  auto depth_state = SDL_GPUDepthStencilState{};
   {
-    vert_desc.slot = 0;
-    vert_desc.input_rate = SDL_GPU_VERTEXINPUTRATE_VERTEX;
-    vert_desc.instance_step_rate = 0;
-    vert_desc.pitch = sizeof(PosVertex);
+    depth_state.compare_op = SDL_GPU_COMPAREOP_LESS_OR_EQUAL;
+    depth_state.enable_depth_test = true;
+    depth_state.enable_depth_write = false;
+    depth_state.enable_stencil_test = false;
   }
 
-  SDL_GPUVertexAttribute vert_attr{};
-  {
-    vert_attr.buffer_slot = 0;
-    vert_attr.format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3;
-    vert_attr.location = 0;
-    vert_attr.offset = 0;
-  }
-
-  SDL_GPUGraphicsPipelineCreateInfo pipelineCreateInfo = {};
-  {
-    pipelineCreateInfo.vertex_shader = vert;
-    pipelineCreateInfo.fragment_shader = frag;
-    pipelineCreateInfo.primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;
-    {
-      auto& state = pipelineCreateInfo.vertex_input_state;
-      state.vertex_buffer_descriptions = &vert_desc;
-      state.num_vertex_buffers = 1;
-      state.vertex_attributes = &vert_attr;
-      state.num_vertex_attributes = 1;
-    }
-    {
-      auto& state = pipelineCreateInfo.target_info;
-      state.color_target_descriptions = &col_desc;
-      state.num_color_targets = 1;
-      state.depth_stencil_format = SDL_GPU_TEXTUREFORMAT_D16_UNORM;
-      state.has_depth_stencil_target = true;
-    }
-    {
-      auto& state = pipelineCreateInfo.depth_stencil_state;
-      state.compare_op = SDL_GPU_COMPAREOP_LESS_OR_EQUAL;
-      state.enable_depth_test = true;
-      state.enable_depth_write = false;
-      state.enable_stencil_test = false;
-    }
-  }
-  Pipeline =
-    SDL_CreateGPUGraphicsPipeline(engine_->Device, &pipelineCreateInfo);
+  PipelineBuilder builder{};
+  builder //
+    .AddColorTarget(framebuffer_format_, false)
+    .SetVertexShader(vert)
+    .SetFragmentShader(frag)
+    .SetPrimitiveType(SDL_GPU_PRIMITIVETYPE_TRIANGLELIST)
+    .AddVertexAttribute(SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3)
+    .EnableDepthWrite()
+    .SetDepthStencilState(depth_state);
+  Pipeline = builder.Build(engine_->Device);
 
   SDL_ReleaseGPUShader(engine_->Device, vert);
   SDL_ReleaseGPUShader(engine_->Device, frag);
