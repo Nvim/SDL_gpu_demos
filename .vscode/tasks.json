@@ -1,50 +1,60 @@
 {
   "version": "2.0.0",
   "tasks": [
+    // ===================================================
+    // Compound
+    // ===================================================
     {
       "type": "shell",
-      "label": "Clean, build, and run",
-      "dependsOrder": "sequence",
-      "command": "build/sdlcube",
-      "dependsOn": ["Clean", "Build", "Build Shaders"]
-    },
-    {
-      "type": "shell",
+      "command": "",
       "label": "Build shaders + program, and run",
       "dependsOrder": "sequence",
-      "command": "build/sdlcube",
-      "dependsOn": ["Build Shaders", "Build"]
+      "dependsOn": ["Build Shaders", "Debug Build", "Debug Run"]
     },
     {
       "type": "shell",
-      "label": "Build and run",
-      "command": "build/sdlcube",
+      "command": "",
+      "label": "Build and run (Debug)",
       "dependsOrder": "sequence",
-      "dependsOn": ["Build"]
+      "dependsOn": ["Debug Build", "Debug Run"]
     },
     {
       "type": "shell",
-      "label": "Run",
-      "command": "build/sdlcube",
+      "command": "",
+      "label": "Build and Test",
+      "dependsOrder": "sequence",
+      "dependsOn": ["Debug Build", "Run Tests"]
+    },
+    // ===================================================
+    // Individual
+    // ===================================================
+    {
+      "type": "shell",
+      "label": "Debug Run",
+      "command": "build/debug-ninja/sdlcube",
       "args": [],
+      "problemMatcher": []
     },
     {
       "type": "shell",
-      "label": "Build",
+      "label": "Debug Build",
       "command": "cmake",
-      "args": ["--build", "build"],
+      "args": ["--preset", "debug-ninja"],
+      "problemMatcher": []
     },
     {
       "type": "shell",
       "label": "Build Shaders",
       "command": "./shaders.sh",
       "args": [],
+      "problemMatcher": []
     },
     {
       "type": "shell",
-      "label": "Clean",
-      "command": "make",
-      "args": ["-C", "build", "clean"],
+      "label": "Run Tests",
+      "command": "ctest",
+      "args": ["--preset", "all"],
+      "problemMatcher": []
     },
   ]
 }
