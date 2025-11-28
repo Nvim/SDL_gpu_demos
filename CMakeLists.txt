@@ -58,5 +58,6 @@ target_link_libraries(${PROJECT_NAME} PUBLIC
 
 target_precompile_headers(${PROJECT_NAME} PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src/pch.h")
 
-# Unit tests:
+# Tests:
+include(CTest)
 add_subdirectory(${PROJECT_SOURCE_DIR}/tests)

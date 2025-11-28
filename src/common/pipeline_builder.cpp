@@ -52,6 +52,8 @@ PipelineBuilder::AddColorTarget(SDL_GPUTextureFormat format, bool blend)
   desc.format = format;
   if (blend) {
     enable_blending(desc);
+  } else {
+    disable_blending(desc);
   }
   color_descs[num_color_targets++] = desc;
   return *this;

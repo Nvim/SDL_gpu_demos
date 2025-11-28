@@ -1,0 +1,102 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 3,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "base-ninja",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_COLOR_DIAGNOSTICS": "ON",
+        "CMAKE_CXX_COMPILER": "clang++",
+        "CMAKE_C_COMPILER": "clang",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": true
+      }
+    },
+    {
+      "name": "debug-ninja",
+      "displayName": "Debug",
+      "description": "Debug build using Ninja generator",
+      "inherits": "base-ninja",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "debug-asan",
+      "displayName": "ASan",
+      "description": "Debug build with ASan using Ninja generator",
+      "inherits": "base-ninja",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "ENABLE_ASAN": true
+      }
+    },
+    {
+      "name": "rel-ninja",
+      "displayName": "Release",
+      "description": "Release build using Ninja generator",
+      "inherits": "base-ninja",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "debug",
+      "displayName": "Debug",
+      "configurePreset": "debug-ninja",
+      "jobs": 12
+    },
+    {
+      "name": "release",
+      "displayName": "Release",
+      "configurePreset": "rel-ninja",
+      "jobs": 12
+    },
+    {
+      "name": "asan",
+      "displayName": "ASan",
+      "configurePreset": "debug-asan",
+      "jobs": 12
+    },
+    {
+      "name": "debug-clean",
+      "displayName": "Clean Debug",
+      "inherits": "debug",
+      "cleanFirst": true,
+      "verbose": true
+    },
+    {
+      "name": "release-clean",
+      "displayName": "Clean Release",
+      "inherits": "release",
+      "cleanFirst": true,
+      "verbose": true
+    },
+    {
+      "name": "asan-clean",
+      "displayName": "Clean ASan",
+      "inherits": "asan",
+      "cleanFirst": true,
+      "verbose": true
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "all",
+      "displayName": "All Tests",
+      "configurePreset": "debug-ninja",
+      "output": {
+        "outputOnFailure": true,
+        "shortProgress": true
+      }
+    }
+  ]
+}

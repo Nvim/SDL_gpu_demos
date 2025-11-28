@@ -1,6 +1,6 @@
 add_executable(tests)
 file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS 
-  "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp"
+  "${PROJECT_SOURCE_DIR}/tests/*.cpp"
   "${PROJECT_SOURCE_DIR}/src/common/*.cpp" # DON'T BUILD MAIN.CPP
 )
 target_sources(tests PRIVATE ${SOURCES})
@@ -22,6 +22,5 @@ target_link_libraries(tests PRIVATE
   # cxx_setup
 )
 
-include(CTest)
 include("${PROJECT_SOURCE_DIR}/thirdparty/Catch2/extras/Catch.cmake")
 catch_discover_tests(tests)
