@@ -118,7 +118,7 @@ Engine::CreateAndUploadMeshBuffers(MeshBuffers* buffers,
                                    const I* indices,
                                    u32 idx_count)
 {
-  LOG_TRACE("GLTFLoader::UploadBuffers");
+  LOG_TRACE("Engine::CreateAndUploadMeshBuffers");
   u32 transfer_size = sizeof(V) * vert_count + sizeof(I) * idx_count;
   LOG_DEBUG("Mesh has {} vertices and {} indices", vert_count, idx_count);
 

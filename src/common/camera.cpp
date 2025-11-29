@@ -91,3 +91,25 @@ Camera::handle_input(f32 delta)
     Position += glm::vec3(rotation_ * glm::vec4(velocity * 0.5f, 0.f));
   }
 }
+
+void
+Camera::SetFov(f32 fov_radians)
+{
+  fov_ = fov_radians;
+  proj_ = glm::perspective(fov_, aspect_, near_, far_);
+}
+
+void
+Camera::SetAspect(f32 aspect)
+{
+  aspect_ = aspect;
+  proj_ = glm::perspective(fov_, aspect_, near_, far_);
+}
+
+void
+Camera::SetNearFar(f32 near, f32 far)
+{
+  near_ = near;
+  far_ = far;
+  proj_ = glm::perspective(fov_, aspect_, near_, far_);
+}

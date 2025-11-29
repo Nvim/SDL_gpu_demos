@@ -1,6 +1,8 @@
 #pragma once
 
 #include "common/program.h"
+#include "common/rendersystem.h"
+#include "common/skybox.h"
 #include "common/types.h"
 
 #include <SDL3/SDL_gpu.h>
@@ -9,14 +11,25 @@
 class GLTFScene;
 class Engine;
 
+namespace grass {
+
+struct CameraBinding
+{
+  glm::mat4 viewproj;
+  glm::vec4 camera_world;
+};
+
 class GrassProgram : public Program
 {
   using path = std::filesystem::path;
 
+  // const path SKYBOX_PATH{
+  //   "resources/textures/plains_sunset/plains_sunset_4k.hdr"
+  // };
   static constexpr const char* VS_PATH =
     "resources/shaders/compiled/grass.vert.spv";
   static constexpr const char* FS_PATH =
-    "resources/shaders/compiled/grass.frag.spv";
+    "resources/shaders/compiled/color.frag.spv";
   static constexpr SDL_GPUTextureFormat TARGET_FORMAT =
     SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
 
@@ -35,6 +48,7 @@ public:
 private:
   bool InitGui();
   bool CreateRenderTargets();
+  bool CreatePipeline();
   ImDrawData* DrawGui();
 
 private:
@@ -43,13 +57,18 @@ private:
   i32 window_h_;
   i32 rendertarget_w_;
   i32 rendertarget_h_;
-  // Camera camera_;
-  // Skybox skybox_{ PBR_PATH / "skybox.hdr", EnginePtr, HDR_TARGET_FORMAT };
+  u32 grid_size_{ 32 };
+  Camera camera_{};
+  // Skybox skybox_{ SKYBOX_PATH, EnginePtr, TARGET_FORMAT };
 
   // GPU Resources:
   SDL_GPUTexture* depth_target_{ nullptr };
   SDL_GPUTexture* scene_target_{ nullptr };
+  SDL_GPUGraphicsPipeline* pipeline_{ nullptr };
   SDL_GPUColorTargetInfo scene_color_target_info_{};
   SDL_GPUDepthStencilTargetInfo scene_depth_target_info_{};
   SDL_GPUColorTargetInfo swapchain_target_info_{};
+  MeshBuffers mesh_buffers_;
 };
+
+} // namespace grass

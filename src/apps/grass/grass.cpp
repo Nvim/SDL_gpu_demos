@@ -1,12 +1,18 @@
 #include <pch.h>
 
-#include "common/logger.h"
 #include "grass.h"
 
+#include "common/engine.h"
+#include "common/logger.h"
+#include "common/pipeline_builder.h"
+#include "common/unit_cube.h"
+
+#include <glm/ext/matrix_transform.hpp>
 #include <imgui/backends/imgui_impl_sdl3.h>
 #include <imgui/backends/imgui_impl_sdlgpu3.h>
 #include <imgui/imgui.h>
 
+namespace grass {
 GrassProgram::GrassProgram(SDL_GPUDevice* device,
                            SDL_Window* window,
                            Engine* engine,
@@ -18,6 +24,7 @@ GrassProgram::GrassProgram(SDL_GPUDevice* device,
 {
   rendertarget_h_ = window_h_ * (3 / 4.f);
   rendertarget_w_ = window_w_ * (3 / 4.f);
+  camera_.SetAspect((f32)rendertarget_w_ / (f32)rendertarget_h_);
   {
     scene_color_target_info_.clear_color = { .2f, 1.f, .7f, 1.f };
     scene_color_target_info_.load_op = SDL_GPU_LOADOP_CLEAR;
@@ -64,6 +71,18 @@ GrassProgram::Init()
     LOG_CRITICAL("Couldn't create render targets");
     return false;
   }
+  if (!CreatePipeline()) {
+    LOG_CRITICAL("Couldn't create render targets");
+    return false;
+  }
+  if (!EnginePtr->CreateAndUploadMeshBuffers(&mesh_buffers_,
+                                             UnitCube::Verts,
+                                             UnitCube::VertCount,
+                                             UnitCube::Indices,
+                                             UnitCube::IndexCount)) {
+    LOG_CRITICAL("Couldn't create grassblade vertex & index buffers");
+    return false;
+  }
   return true;
 }
 
@@ -81,6 +100,7 @@ GrassProgram::Poll()
       }
     }
   }
+  camera_.Update(DeltaTime);
   return true;
 }
 
@@ -90,6 +110,8 @@ GrassProgram::Draw()
   static const SDL_GPUViewport scene_vp{
     0, 0, float(rendertarget_w_), float(rendertarget_h_), 0.1f, 1.0f
   };
+  static const SDL_GPUBufferBinding vert_bind{ mesh_buffers_.VertexBuffer, 0 };
+  static const SDL_GPUBufferBinding idx_bind{ mesh_buffers_.IndexBuffer, 0 };
 
   SDL_GPUCommandBuffer* cmdbuf = SDL_AcquireGPUCommandBuffer(Device);
   if (cmdbuf == NULL) {
@@ -115,7 +137,28 @@ GrassProgram::Draw()
     SDL_GPURenderPass* scene_pass =
       SDL_BeginGPURenderPass(cmdbuf, &scene_color_target_info_, 1, nullptr);
 
+    CameraBinding camera_bind{
+      .viewproj = camera_.Projection() * camera_.View(),
+      .camera_world = glm::vec4{ camera_.Position, 1.0 },
+    };
+
+    struct
+    {
+      glm::mat4 model;
+    } instance_bind{
+      glm::identity<glm::mat4>(),
+    };
+
     SDL_SetGPUViewport(scene_pass, &scene_vp);
+    SDL_BindGPUGraphicsPipeline(scene_pass, pipeline_);
+    SDL_PushGPUVertexUniformData(cmdbuf, 0, &camera_bind, sizeof(camera_bind));
+    SDL_PushGPUVertexUniformData(
+      cmdbuf, 1, &instance_bind, sizeof(instance_bind));
+    SDL_BindGPUVertexBuffers(scene_pass, 0, &vert_bind, 1);
+    SDL_BindGPUIndexBuffer(
+      scene_pass, &idx_bind, SDL_GPU_INDEXELEMENTSIZE_16BIT);
+
+    SDL_DrawGPUIndexedPrimitives(scene_pass, UnitCube::IndexCount, 1, 0, 0, 0);
 
     SDL_EndGPURenderPass(scene_pass);
   }
@@ -220,6 +263,35 @@ GrassProgram::CreateRenderTargets()
   return true;
 }
 
+bool
+GrassProgram::CreatePipeline()
+{
+  LOG_TRACE("GrassProgram::CreatePipeline");
+  auto vert = LoadShader(VS_PATH, Device, 0, 2, 0, 0);
+  if (vert == nullptr) {
+    LOG_ERROR("Couldn't load vertex shader at path {}", VS_PATH);
+    return false;
+  }
+  auto frag = LoadShader(FS_PATH, Device, 0, 0, 0, 0);
+  if (frag == nullptr) {
+    LOG_ERROR("Couldn't load fragment shader at path {}", FS_PATH);
+    return false;
+  }
+  PipelineBuilder builder;
+  builder //
+    .AddColorTarget(TARGET_FORMAT, false)
+    .AddVertexAttribute(SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3)
+    .SetVertexShader(vert)
+    .SetFragmentShader(frag);
+
+  pipeline_ = builder.Build(Device);
+  if (!pipeline_) {
+    LOG_ERROR("Couldn't build pipeline: {}", GETERR);
+    return false;
+  }
+  return true;
+}
+
 ImDrawData*
 GrassProgram::DrawGui()
 {
@@ -248,3 +320,4 @@ GrassProgram::DrawGui()
   ImGui::Render();
   return ImGui::GetDrawData();
 }
+} // namespace grass

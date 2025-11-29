@@ -7,7 +7,7 @@ class Camera
 public:
   // clang-format off
   Camera(
-    float fov=60.0f,
+    float fov=glm::radians(60.f),
     float aspect=4/3.f,
     float near=.1f,
     float far=100.f
@@ -26,6 +26,10 @@ public:
   bool Moved{ true };
   bool Rotated{ true };
 
+  void SetFov(f32 fov_radians);
+  void SetAspect(f32 aspect);
+  void SetNearFar(f32 near, f32 far);
+
 private:
   void handle_input(f32 delta);
 
@@ -35,12 +39,9 @@ private:
   glm::mat4 model_;
   glm::mat4 rotation_;
 
-  // glm::vec3 lookat_{ 0.0f, 0.0f, 0.0f }; // direction camera is looking at
-  // glm::vec3 up_{ 0.0f, -1.0f, 0.0f };
-  // glm::vec3 right_{ 1.0f, 0.0f, 0.0f };
   // TODO: storing these for GUI config
-  [[maybe_unused]] float fov_;
-  [[maybe_unused]] float aspect_;
-  [[maybe_unused]] float near_;
-  [[maybe_unused]] float far_;
+  float fov_;
+  float aspect_;
+  float near_;
+  float far_;
 };

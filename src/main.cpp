@@ -50,7 +50,7 @@ main()
       LOG_CRITICAL("Couldn't initialize engine");
       return -1;
     }
-    GrassProgram app{ Device, Window, &engine, 1600, 1200 };
+    grass::GrassProgram app{ Device, Window, &engine, 1600, 1200 };
 
     if (!app.Init()) {
       LOG_CRITICAL("Couldn't init app.");

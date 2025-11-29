@@ -157,6 +157,7 @@ Skybox::Draw(SDL_GPURenderPass* pass) const
   static const SDL_GPUBufferBinding iBufBind{ Buffers.IndexBuffer, 0 };
 
   SDL_BindGPUGraphicsPipeline(pass, Pipeline);
+  // SDL_PushGPUVertexUniformData(cmdbuf, 0, cameraj, Uint32 length)
   SDL_BindGPUVertexBuffers(pass, 0, &vBufBind, 1);
   SDL_BindGPUIndexBuffer(pass, &iBufBind, SDL_GPU_INDEXELEMENTSIZE_16BIT);
   SDL_BindGPUFragmentSamplers(pass, 0, &texBind, 1);

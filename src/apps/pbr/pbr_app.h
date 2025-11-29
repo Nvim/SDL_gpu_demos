@@ -24,19 +24,6 @@ struct Rotation
   float speed;
 };
 
-struct MatricesBinding
-{
-  glm::mat4 viewProj;
-  glm::mat4 objModel;
-  // glm::mat4 cameraModel;
-};
-
-struct CameraBinding
-{
-  glm::mat4 cameraMatrix;
-  glm::vec3 cameraPos;
-};
-
 struct SceneDataBinding
 {
   glm::mat4 viewproj;

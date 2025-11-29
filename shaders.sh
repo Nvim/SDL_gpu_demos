@@ -12,6 +12,7 @@ glslang $SRC/skybox.frag -V -o $OUT/skybox.frag.spv;
 glslang $SRC/skybox.vert -V -o $OUT/skybox.vert.spv -I$SRC;
 glslang $SRC/cubemap_projection.frag -V -o $OUT/cubemap_projection.frag.spv;
 glslang $SRC/cubemap_projection.vert -V -o $OUT/cubemap_projection.vert.spv;
+glslang $SRC/grass.vert -V -o $OUT/grass.vert.spv;
 
 glslang $SRC/post_process.comp -V -o $OUT/post_process.comp.spv;
 
