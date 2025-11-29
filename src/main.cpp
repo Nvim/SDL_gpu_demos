@@ -3,7 +3,8 @@
 #include <SDL3/SDL_video.h>
 
 // #include <apps/ssbo_demo/ssbo_demo.h>
-#include <apps/pbr/pbr_app.h>
+// #include <apps/pbr/pbr_app.h>
+#include <apps/grass/grass.h>
 #include <common/logger.h>
 
 int
@@ -49,7 +50,7 @@ main()
       LOG_CRITICAL("Couldn't initialize engine");
       return -1;
     }
-    CubeProgram app{ Device, Window, &engine, 1200, 900 };
+    GrassProgram app{ Device, Window, &engine, 1600, 1200 };
 
     if (!app.Init()) {
       LOG_CRITICAL("Couldn't init app.");

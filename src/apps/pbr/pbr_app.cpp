@@ -590,15 +590,15 @@ CubeProgram::DrawGui()
 
   // GUI stuff
   {
-    for (u8 i = 0; i < 4; ++i) {
-      ImGui::Text("[ ");
-      ImGui::SameLine();
-      for (u8 j = 0; j < 4; ++j) {
-        ImGui::Text("%f ", global_transform_.Matrix()[i][j]);
-        ImGui::SameLine();
-      }
-      ImGui::Text("]");
-    }
+    // for (u8 i = 0; i < 4; ++i) {
+    //   ImGui::Text("[ ");
+    //   ImGui::SameLine();
+    //   for (u8 j = 0; j < 4; ++j) {
+    //     ImGui::Text("%f ", global_transform_.Matrix()[i][j]);
+    //     ImGui::SameLine();
+    //   }
+    //   ImGui::Text("]");
+    // }
     if (ImGui::Begin("Scene")) {
       ImGui::Text("Hello world");
       ImGui::Image((ImTextureID)(intptr_t)post_processed_target_,
