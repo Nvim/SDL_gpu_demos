@@ -22,7 +22,9 @@ public:
   ~Skybox();
 
   bool IsLoaded() const { return loaded_; }
-  void Draw(SDL_GPURenderPass* pass) const;
+  void Draw(SDL_GPUCommandBuffer* cmd_buf,
+            SDL_GPURenderPass* pass,
+            const CameraBinding& camera_uniform) const;
 
 public:
   static constexpr const char* FRAG_PATH =

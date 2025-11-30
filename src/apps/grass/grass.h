@@ -13,19 +13,13 @@ class Engine;
 
 namespace grass {
 
-struct CameraBinding
-{
-  glm::mat4 viewproj;
-  glm::vec4 camera_world;
-};
-
 class GrassProgram : public Program
 {
   using path = std::filesystem::path;
 
-  // const path SKYBOX_PATH{
-  //   "resources/textures/plains_sunset/plains_sunset_4k.hdr"
-  // };
+  const path SKYBOX_PATH{
+    "resources/textures/plains_sunset/plains_sunset_4k.hdr"
+  };
   static constexpr const char* VS_PATH =
     "resources/shaders/compiled/grass.vert.spv";
   static constexpr const char* FS_PATH =
@@ -59,7 +53,7 @@ private:
   i32 rendertarget_h_;
   u32 grid_size_{ 32 };
   Camera camera_{};
-  // Skybox skybox_{ SKYBOX_PATH, EnginePtr, TARGET_FORMAT };
+  Skybox skybox_{ SKYBOX_PATH, EnginePtr, TARGET_FORMAT };
 
   // GPU Resources:
   SDL_GPUTexture* depth_target_{ nullptr };

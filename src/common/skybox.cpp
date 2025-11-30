@@ -4,6 +4,7 @@
 #include "common/engine.h"
 #include "common/pipeline_builder.h"
 #include "common/rendersystem.h"
+#include "common/types.h"
 #include "common/unit_cube.h"
 #include "skybox.h"
 
@@ -149,7 +150,9 @@ Skybox::CreatePipeline()
 }
 
 void
-Skybox::Draw(SDL_GPURenderPass* pass) const
+Skybox::Draw(SDL_GPUCommandBuffer* cmd_buf,
+             SDL_GPURenderPass* pass,
+             const CameraBinding& camera_uniform) const
 {
   static const SDL_GPUTextureSamplerBinding texBind{ Cubemap->Texture,
                                                      CubemapSampler };
@@ -157,7 +160,8 @@ Skybox::Draw(SDL_GPURenderPass* pass) const
   static const SDL_GPUBufferBinding iBufBind{ Buffers.IndexBuffer, 0 };
 
   SDL_BindGPUGraphicsPipeline(pass, Pipeline);
-  // SDL_PushGPUVertexUniformData(cmdbuf, 0, cameraj, Uint32 length)
+  SDL_PushGPUVertexUniformData(
+    cmd_buf, 0, &camera_uniform, sizeof(CameraBinding));
   SDL_BindGPUVertexBuffers(pass, 0, &vBufBind, 1);
   SDL_BindGPUIndexBuffer(pass, &iBufBind, SDL_GPU_INDEXELEMENTSIZE_16BIT);
   SDL_BindGPUFragmentSamplers(pass, 0, &texBind, 1);

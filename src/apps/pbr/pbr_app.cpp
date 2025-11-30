@@ -262,6 +262,11 @@ CubeProgram::Draw()
     instance_cfg.dimension,
     pbr_debug_flags_,
   };
+  CameraBinding camera_bind{
+    .viewproj = vp,
+    .camera_model = camera_.Model(),
+    .camera_world = glm::vec4{ camera_.Position, 1.f },
+  };
 
   ImGui_ImplSDLGPU3_PrepareDrawData(draw_data, cmdbuf);
 
@@ -316,7 +321,7 @@ CubeProgram::Draw()
       stats_.total_draws++;
     }
     if (skybox_toggle_) {
-      skybox_.Draw(scenePass);
+      skybox_.Draw(cmdbuf, scenePass, camera_bind);
     }
 
     render_context_.Clear();

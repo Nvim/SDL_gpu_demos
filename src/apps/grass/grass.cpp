@@ -2,8 +2,6 @@
 
 #include "grass.h"
 
-#include "common/engine.h"
-#include "common/logger.h"
 #include "common/pipeline_builder.h"
 #include "common/unit_cube.h"
 
@@ -135,11 +133,12 @@ GrassProgram::Draw()
 
   { // Scene pass
     SDL_GPURenderPass* scene_pass =
-      SDL_BeginGPURenderPass(cmdbuf, &scene_color_target_info_, 1, nullptr);
+      SDL_BeginGPURenderPass(cmdbuf, &scene_color_target_info_, 1, &scene_depth_target_info_);
 
     CameraBinding camera_bind{
       .viewproj = camera_.Projection() * camera_.View(),
-      .camera_world = glm::vec4{ camera_.Position, 1.0 },
+      .camera_model = camera_.Model(),
+      .camera_world = glm::vec4{ camera_.Position, 1.f },
     };
 
     struct
@@ -159,6 +158,8 @@ GrassProgram::Draw()
       scene_pass, &idx_bind, SDL_GPU_INDEXELEMENTSIZE_16BIT);
 
     SDL_DrawGPUIndexedPrimitives(scene_pass, UnitCube::IndexCount, 1, 0, 0, 0);
+
+    skybox_.Draw(cmdbuf, scene_pass, camera_bind);
 
     SDL_EndGPURenderPass(scene_pass);
   }
@@ -280,15 +281,22 @@ GrassProgram::CreatePipeline()
   PipelineBuilder builder;
   builder //
     .AddColorTarget(TARGET_FORMAT, false)
-    .AddVertexAttribute(SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3)
     .SetVertexShader(vert)
-    .SetFragmentShader(frag);
+    .SetFragmentShader(frag)
+    .SetPrimitiveType(SDL_GPU_PRIMITIVETYPE_TRIANGLELIST)
+    .AddVertexAttribute(SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3)
+    .EnableDepthTest()
+    .SetCompareOp(SDL_GPU_COMPAREOP_LESS)
+    .EnableDepthWrite(SDL_GPU_TEXTUREFORMAT_D16_UNORM);
 
   pipeline_ = builder.Build(Device);
   if (!pipeline_) {
     LOG_ERROR("Couldn't build pipeline: {}", GETERR);
     return false;
   }
+
+  SDL_ReleaseGPUShader(Device, frag);
+  SDL_ReleaseGPUShader(Device, vert);
   return true;
 }
 

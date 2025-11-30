@@ -84,6 +84,13 @@ struct PosNormalTangentColorUvVertex
   glm::vec4 color{ 1.f };
 };
 
+struct CameraBinding
+{
+  glm::mat4 viewproj;
+  glm::mat4 camera_model;
+  glm::vec4 camera_world;
+};
+
 class TransferBufferWrapper
 {
 private:

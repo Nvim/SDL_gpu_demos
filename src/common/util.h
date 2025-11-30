@@ -65,7 +65,7 @@ CastFlag(F f)
 }
 
 // TODO: add more
-static std::unordered_map<u32, SDL_GPUTextureFormat> VkToSDL_TextureFormat = {
+static const std::unordered_map<u32, SDL_GPUTextureFormat> VkToSDL_TextureFormat = {
   { 109, SDL_GPU_TEXTUREFORMAT_R32G32B32A32_FLOAT },
   { 97, SDL_GPU_TEXTUREFORMAT_R32G32B32A32_FLOAT },
 };
