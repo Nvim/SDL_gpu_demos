@@ -65,10 +65,11 @@ CastFlag(F f)
 }
 
 // TODO: add more
-static const std::unordered_map<u32, SDL_GPUTextureFormat> VkToSDL_TextureFormat = {
-  { 109, SDL_GPU_TEXTUREFORMAT_R32G32B32A32_FLOAT },
-  { 97, SDL_GPU_TEXTUREFORMAT_R32G32B32A32_FLOAT },
-};
+static const std::unordered_map<u32, SDL_GPUTextureFormat>
+  VkToSDL_TextureFormat = {
+    { 109, SDL_GPU_TEXTUREFORMAT_R32G32B32A32_FLOAT },
+    { 97, SDL_GPU_TEXTUREFORMAT_R32G32B32A32_FLOAT },
+  };
 
 #define DISABLE_COPY_AND_MOVE(ClassName)                                       \
   ClassName(const ClassName&) = delete;                                        \

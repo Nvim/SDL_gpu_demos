@@ -5,6 +5,7 @@
 #include <SDL3/SDL_video.h>
 
 #include <apps/grass/grass.h>
+// #include <apps/pbr/pbr_app.h>
 #include <common/logger.h>
 
 int
@@ -51,6 +52,7 @@ main()
       return -1;
     }
     grass::GrassProgram app{ Device, Window, &engine, 1600, 1200 };
+    // CubeProgram app{ Device, Window, &engine, 1600, 1200 };
 
     if (!app.Init()) {
       LOG_CRITICAL("Couldn't init app.");

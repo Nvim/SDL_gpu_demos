@@ -132,8 +132,8 @@ GrassProgram::Draw()
   ImGui_ImplSDLGPU3_PrepareDrawData(draw_data, cmdbuf);
 
   { // Scene pass
-    SDL_GPURenderPass* scene_pass =
-      SDL_BeginGPURenderPass(cmdbuf, &scene_color_target_info_, 1, &scene_depth_target_info_);
+    SDL_GPURenderPass* scene_pass = SDL_BeginGPURenderPass(
+      cmdbuf, &scene_color_target_info_, 1, &scene_depth_target_info_);
 
     CameraBinding camera_bind{
       .viewproj = camera_.Projection() * camera_.View(),
@@ -248,7 +248,7 @@ GrassProgram::CreateRenderTargets()
   }
 
   { // Depth target
-    info.format = SDL_GPU_TEXTUREFORMAT_D16_UNORM;
+    info.format = DEPTH_FORMAT;
     info.usage =
       SDL_GPU_TEXTUREUSAGE_SAMPLER | SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET;
     depth_target_ = SDL_CreateGPUTexture(Device, &info);
@@ -287,7 +287,7 @@ GrassProgram::CreatePipeline()
     .AddVertexAttribute(SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3)
     .EnableDepthTest()
     .SetCompareOp(SDL_GPU_COMPAREOP_LESS)
-    .EnableDepthWrite(SDL_GPU_TEXTUREFORMAT_D16_UNORM);
+    .EnableDepthWrite(DEPTH_FORMAT);
 
   pipeline_ = builder.Build(Device);
   if (!pipeline_) {

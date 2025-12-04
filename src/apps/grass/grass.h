@@ -26,6 +26,8 @@ class GrassProgram : public Program
     "resources/shaders/compiled/color.frag.spv";
   static constexpr SDL_GPUTextureFormat TARGET_FORMAT =
     SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
+  static constexpr SDL_GPUTextureFormat DEPTH_FORMAT =
+    SDL_GPU_TEXTUREFORMAT_D16_UNORM;
 
 public:
   GrassProgram(SDL_GPUDevice* device,

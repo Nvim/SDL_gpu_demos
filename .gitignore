@@ -4,3 +4,4 @@ resources/shaders/compiled/*.spv
 .cache
 imgui.ini
 *.cap
+compile_commands.json

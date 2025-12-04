@@ -3,6 +3,7 @@
 #include "pbr_app.h"
 
 #include "common/camera.h"
+#include "common/compute_pipeline_builder.h"
 #include "common/cubemap.h"
 #include "common/engine.h"
 #include "common/logger.h"
@@ -498,38 +499,14 @@ CubeProgram::CreatePostProcessPipeline()
 {
   LOG_TRACE("CubeProgram::CreatePostProcessPipeline");
 
-  u64 codeSize;
-  void* code = SDL_LoadFile(POST_PROCESS_PATH, &codeSize);
-  if (code == nullptr) {
-    LOG_ERROR("Couldn't load compute shader file: {}", GETERR);
-    return false;
-  }
-
-  SDL_GPUColorTargetDescription color_descs[1]{};
-  {
-    auto& d = color_descs[0];
-    d.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
-  }
-
-  SDL_GPUComputePipelineCreateInfo pipelineInfo{};
-  {
-    pipelineInfo.code = (u8*)code;
-    pipelineInfo.code_size = codeSize;
-    pipelineInfo.entrypoint = "main";
-    pipelineInfo.format = SDL_GPU_SHADERFORMAT_SPIRV;
-    pipelineInfo.num_samplers = 0;
-    pipelineInfo.num_readonly_storage_textures = 1;
-    pipelineInfo.num_readonly_storage_buffers = 0;
-    pipelineInfo.num_readwrite_storage_textures = 1;
-    pipelineInfo.num_readwrite_storage_buffers = 0;
-    pipelineInfo.num_uniform_buffers = 1;
-    pipelineInfo.threadcount_x = 16;
-    pipelineInfo.threadcount_y = 16;
-    pipelineInfo.threadcount_z = 1;
-  }
-
-  post_process_pipeline = SDL_CreateGPUComputePipeline(Device, &pipelineInfo);
-  SDL_free(code);
+  ComputePipelineBuilder builder{};
+  post_process_pipeline = builder //
+                            .SetReadOnlyStorageTextureCount(1)
+                            .SetReadWriteStorageTextureCount(1)
+                            .SetUBOCount(1)
+                            .SetThreadCount(16, 16, 1)
+                            .SetShader(POST_PROCESS_PATH)
+                            .Build(Device);
 
   if (post_process_pipeline == nullptr) {
     LOG_ERROR("Couldn't create compute pipeline: {}", GETERR);
