@@ -1,6 +1,6 @@
 #pragma once
 
-#include "SDL3/SDL_gpu.h"
+#include <SDL3/SDL_gpu.h>
 #include <memory>
 
 using u8 = std::uint8_t;
@@ -47,6 +47,12 @@ static_assert(FLOAT2 == 8);
 struct PosVertex
 {
   float pos[3];
+};
+
+struct PosVertex_Aligned
+{
+  float pos[3];
+  float pad_;
 };
 
 struct PosColVertex

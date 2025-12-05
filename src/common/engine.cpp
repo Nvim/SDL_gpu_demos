@@ -1,10 +1,10 @@
 #include "engine.h"
 
-#include "SDL3/SDL_gpu.h"
 #include "common/cubemap.h"
 #include "common/gltf_loader.h"
 #include "common/logger.h"
 #include "common/types.h"
+#include <SDL3/SDL_gpu.h>
 
 Engine::Engine(SDL_GPUDevice* device, SDL_Window* window)
   : Device{ device }

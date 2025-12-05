@@ -1,5 +1,6 @@
 #pragma once
 
+#include "common/types.h"
 namespace UnitCube {
 // clang-format off
 static constexpr u32 VertCount = 24;
@@ -33,6 +34,38 @@ static constexpr PosVertex Verts[VertCount] = {
   { {-1.f, -1.f, -1.f} },
   { {-1.f, -1.f,  1.f} },
   { { 1.f, -1.f,  1.f} },
+};
+
+static constexpr PosVertex_Aligned Verts_Aligned[VertCount] = {
+  { {-1.f, -1.f, 1.f}, 0.f},
+  { { 1.f, -1.f, 1.f}, 0.f},
+  { { 1.f,  1.f, 1.f}, 0.f},
+  { {-1.f,  1.f, 1.f}, 0.f},
+
+  { { 1.f, -1.f, -1.f}, 0.f},
+  { {-1.f, -1.f, -1.f}, 0.f},
+  { {-1.f,  1.f, -1.f}, 0.f},
+  { { 1.f,  1.f, -1.f}, 0.f},
+
+  { {-1.f, -1.f, -1.f}, 0.f},
+  { {-1.f, -1.f,  1.f}, 0.f},
+  { {-1.f,  1.f,  1.f}, 0.f},
+  { {-1.f,  1.f, -1.f}, 0.f},
+
+  { {1.f, -1.f, -1.f}, 0.f},
+  { {1.f, -1.f,  1.f}, 0.f},
+  { {1.f,  1.f,  1.f}, 0.f},
+  { {1.f,  1.f, -1.f}, 0.f},
+
+  { {-1.f, 1.f, -1.f}, 0.f},
+  { { 1.f, 1.f, -1.f}, 0.f},
+  { { 1.f, 1.f,  1.f}, 0.f},
+  { {-1.f, 1.f,  1.f}, 0.f},
+
+  { { 1.f, -1.f, -1.f}, 0.f},
+  { {-1.f, -1.f, -1.f}, 0.f},
+  { {-1.f, -1.f,  1.f}, 0.f},
+  { { 1.f, -1.f,  1.f}, 0.f},
 };
 
 static constexpr u32 IndexCount = 36;

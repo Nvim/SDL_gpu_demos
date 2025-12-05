@@ -336,7 +336,6 @@ ProjectionCubemapLoader::Load(std::filesystem::path path,
       tex_info.layer_count_or_depth = 1;
       tex_info.num_levels = 1;
       tex_info.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER;
-      tex_info.sample_count = SDL_GPU_SAMPLECOUNT_1;
     }
     tex = SDL_CreateGPUTexture(device_, &tex_info);
     if (!tex) {
@@ -447,7 +446,7 @@ ProjectionCubemapLoader::Load(std::filesystem::path path,
       target_info.load_op = SDL_GPU_LOADOP_CLEAR;
       target_info.store_op = SDL_GPU_STOREOP_STORE;
       target_info.resolve_texture = nullptr;
-      // target_info.resolve_layer = 0;
+      target_info.mip_level = 0;
     }
     static const SDL_GPUViewport viewport{ 0, 0, 512.f, 512.f, .1f, 1.f };
     const SDL_GPUBufferBinding vert_bind{ VertexBuffer, 0 };

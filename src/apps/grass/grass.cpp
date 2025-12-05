@@ -4,6 +4,8 @@
 
 #include "common/pipeline_builder.h"
 #include "common/unit_cube.h"
+#include "common/util.h"
+#include <SDL3/SDL_gpu.h>
 
 #include <glm/ext/matrix_transform.hpp>
 #include <imgui/backends/imgui_impl_sdl3.h>
@@ -50,7 +52,10 @@ GrassProgram::GrassProgram(SDL_GPUDevice* device,
 
 GrassProgram::~GrassProgram()
 {
-  LOG_DEBUG("Destroyed GrassProgram");
+  LOG_DEBUG("Destroying GrassProgram");
+  RELEASE_IF(pipeline_, SDL_ReleaseGPUGraphicsPipeline);
+  RELEASE_IF(index_buffer_, SDL_ReleaseGPUBuffer);
+  RELEASE_IF(vertex_ssbo_, SDL_ReleaseGPUBuffer);
   SDL_WaitForGPUIdle(Device);
   ImGui_ImplSDL3_Shutdown();
   ImGui_ImplSDLGPU3_Shutdown();
@@ -70,15 +75,11 @@ GrassProgram::Init()
     return false;
   }
   if (!CreatePipeline()) {
-    LOG_CRITICAL("Couldn't create render targets");
+    LOG_CRITICAL("Couldn't create graphics pipeline");
     return false;
   }
-  if (!EnginePtr->CreateAndUploadMeshBuffers(&mesh_buffers_,
-                                             UnitCube::Verts,
-                                             UnitCube::VertCount,
-                                             UnitCube::Indices,
-                                             UnitCube::IndexCount)) {
-    LOG_CRITICAL("Couldn't create grassblade vertex & index buffers");
+  if (!UploadVertexData()) {
+    LOG_CRITICAL("Couldn't create grassblade ssbo & index buffers");
     return false;
   }
   return true;
@@ -108,8 +109,9 @@ GrassProgram::Draw()
   static const SDL_GPUViewport scene_vp{
     0, 0, float(rendertarget_w_), float(rendertarget_h_), 0.1f, 1.0f
   };
-  static const SDL_GPUBufferBinding vert_bind{ mesh_buffers_.VertexBuffer, 0 };
-  static const SDL_GPUBufferBinding idx_bind{ mesh_buffers_.IndexBuffer, 0 };
+  // static const SDL_GPUBufferBinding vert_bind{ mesh_buffers_.VertexBuffer, 0
+  // };
+  static const SDL_GPUBufferBinding idx_bind{ index_buffer_, 0 };
 
   SDL_GPUCommandBuffer* cmdbuf = SDL_AcquireGPUCommandBuffer(Device);
   if (cmdbuf == NULL) {
@@ -149,11 +151,13 @@ GrassProgram::Draw()
     };
 
     SDL_SetGPUViewport(scene_pass, &scene_vp);
+
     SDL_BindGPUGraphicsPipeline(scene_pass, pipeline_);
     SDL_PushGPUVertexUniformData(cmdbuf, 0, &camera_bind, sizeof(camera_bind));
     SDL_PushGPUVertexUniformData(
       cmdbuf, 1, &instance_bind, sizeof(instance_bind));
-    SDL_BindGPUVertexBuffers(scene_pass, 0, &vert_bind, 1);
+    // SDL_BindGPUVertexBuffers(scene_pass, 0, &vert_bind, 1);
+    SDL_BindGPUVertexStorageBuffers(scene_pass, 0, &vertex_ssbo_, 1);
     SDL_BindGPUIndexBuffer(
       scene_pass, &idx_bind, SDL_GPU_INDEXELEMENTSIZE_16BIT);
 
@@ -268,7 +272,7 @@ bool
 GrassProgram::CreatePipeline()
 {
   LOG_TRACE("GrassProgram::CreatePipeline");
-  auto vert = LoadShader(VS_PATH, Device, 0, 2, 0, 0);
+  auto vert = LoadShader(VS_PATH, Device, 0, 2, 1, 0);
   if (vert == nullptr) {
     LOG_ERROR("Couldn't load vertex shader at path {}", VS_PATH);
     return false;
@@ -284,7 +288,7 @@ GrassProgram::CreatePipeline()
     .SetVertexShader(vert)
     .SetFragmentShader(frag)
     .SetPrimitiveType(SDL_GPU_PRIMITIVETYPE_TRIANGLELIST)
-    .AddVertexAttribute(SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3)
+    // .AddVertexAttribute(SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3)
     .EnableDepthTest()
     .SetCompareOp(SDL_GPU_COMPAREOP_LESS)
     .EnableDepthWrite(DEPTH_FORMAT);
@@ -297,6 +301,48 @@ GrassProgram::CreatePipeline()
 
   SDL_ReleaseGPUShader(Device, frag);
   SDL_ReleaseGPUShader(Device, vert);
+  return true;
+}
+
+bool
+GrassProgram::UploadVertexData()
+{
+  LOG_TRACE("GrassProgram::UploadVertexData");
+  auto vert_count = UnitCube::VertCount;
+  auto idx_count = UnitCube::IndexCount;
+  {
+    SDL_GPUBufferCreateInfo idxInfo{};
+    {
+      idxInfo.usage = SDL_GPU_BUFFERUSAGE_INDEX;
+      idxInfo.size = static_cast<u32>(sizeof(u16) * idx_count);
+    }
+    index_buffer_ = SDL_CreateGPUBuffer(Device, &idxInfo);
+    if (!index_buffer_) {
+      LOG_ERROR("couldn't create index buffer");
+      return false;
+    }
+  }
+  {
+    SDL_GPUBufferCreateInfo ssbo_info{};
+    {
+      ssbo_info.usage = SDL_GPU_BUFFERUSAGE_GRAPHICS_STORAGE_READ;
+      ssbo_info.size = static_cast<u32>(sizeof(PosVertex) * vert_count);
+    }
+    vertex_ssbo_ = SDL_CreateGPUBuffer(Device, &ssbo_info);
+    if (!vertex_ssbo_) {
+      LOG_ERROR("couldn't create vertices ssbo");
+      return false;
+    }
+  }
+  if (!EnginePtr->UploadToBuffer(index_buffer_, UnitCube::Indices, idx_count)) {
+    LOG_ERROR("Couldn't upload index buffer data");
+    return false;
+  }
+  if (!EnginePtr->UploadToBuffer(
+        vertex_ssbo_, UnitCube::Verts_Aligned, vert_count)) {
+    LOG_ERROR("Couldn't upload vertices ssbo data");
+    return false;
+  }
   return true;
 }
 

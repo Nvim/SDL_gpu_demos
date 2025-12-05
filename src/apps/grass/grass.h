@@ -45,6 +45,7 @@ private:
   bool InitGui();
   bool CreateRenderTargets();
   bool CreatePipeline();
+  bool UploadVertexData();
   ImDrawData* DrawGui();
 
 private:
@@ -64,7 +65,8 @@ private:
   SDL_GPUColorTargetInfo scene_color_target_info_{};
   SDL_GPUDepthStencilTargetInfo scene_depth_target_info_{};
   SDL_GPUColorTargetInfo swapchain_target_info_{};
-  MeshBuffers mesh_buffers_;
+  SDL_GPUBuffer* index_buffer_{ nullptr };
+  SDL_GPUBuffer* vertex_ssbo_{ nullptr };
 };
 
 } // namespace grass

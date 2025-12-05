@@ -1,6 +1,5 @@
 #include <pch.h>
 
-#include "SDL3/SDL_stdinc.h"
 #include "common/logger.h"
 #include "compute_pipeline_builder.h"
 

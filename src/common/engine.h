@@ -1,9 +1,9 @@
 #pragma once
 
-#include "SDL3/SDL_gpu.h"
 #include "common/cubemap.h"
 #include "common/rendersystem.h"
 #include "common/types.h"
+#include <SDL3/SDL_gpu.h>
 
 class GLTFLoader;
 class GLTFScene;
@@ -24,7 +24,7 @@ public:
 
   // GPU Uploads:
   template<typename T>
-  bool UploadToBuffer(SDL_GPUBuffer* buf, T* data, u32 size);
+  bool UploadToBuffer(SDL_GPUBuffer* buf, const T* data, const u32 size);
   template<typename V, typename I>
   bool CreateAndUploadMeshBuffers(MeshBuffers* buffers,
                                   const V* vertices,
@@ -53,7 +53,7 @@ private:
 
 template<typename T>
 bool
-Engine::UploadToBuffer(SDL_GPUBuffer* buf, T* data, u32 count)
+Engine::UploadToBuffer(SDL_GPUBuffer* buf, const T* data, const u32 count)
 {
   LOG_TRACE("GLTFLoader::UploadBuffers");
   if (buf == nullptr) {

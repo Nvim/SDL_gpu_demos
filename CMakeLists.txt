@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.30)
 project(sdlcube LANGUAGES CXX C)
 
 option(ENABLE_ASAN "Enable AddressSanitizer instrumentation" OFF)
+option(BUILD_SDL "Build a vendored version of SDL3" OFF)
 
 # CPP Setup
 set(CMAKE_CXX_STANDARD 20)
@@ -12,6 +13,9 @@ target_include_directories(cxx_setup INTERFACE "${PROJECT_SOURCE_DIR}/src")
 target_compile_options(cxx_setup INTERFACE -Wall -Wpedantic -Wextra)
 
 # Expected installed libs
+if (NOT BUILD_SDL)
+  find_package(SDL3 REQUIRED)
+endif()
 find_package(glm REQUIRED)
 find_package(simdjson REQUIRED)
 

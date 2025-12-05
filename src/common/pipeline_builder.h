@@ -1,7 +1,7 @@
 #pragma once
 
-#include "SDL3/SDL_gpu.h"
 #include "common/types.h"
+#include <SDL3/SDL_gpu.h>
 #include <array>
 
 // Only supports a single vertex buffer for now
