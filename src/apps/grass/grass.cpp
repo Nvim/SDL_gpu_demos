@@ -362,6 +362,18 @@ GrassProgram::DrawGui()
     ImGui::Text("Window Height: %d", window_h_);
     ImGui::Text("Rendertarget Width: %d", rendertarget_w_);
     ImGui::Text("Rendertarget Height: %d", rendertarget_h_);
+    if (ImGui::TreeNode("Camera")) {
+      ImGui::Text("Position");
+      if (ImGui::SliderFloat3("Translation", (f32*)&camera_.Position, -50.f, 50.f)) {
+        camera_.Moved = true;
+      }
+      ImGui::Text("Rotation");
+      if (ImGui::SliderFloat("Yaw", (float*)&camera_.Yaw, -90.f, 90.f) ||
+          ImGui::SliderFloat("Pitch", (float*)&camera_.Pitch, -90.f, 90.f)) {
+        camera_.Rotated = true;
+      }
+      ImGui::TreePop();
+    }
     ImGui::End();
   }
   if (ImGui::Begin("aaa")) {

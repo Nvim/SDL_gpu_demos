@@ -37,7 +37,7 @@ private:
   glm::mat4 proj_;
   glm::mat4 view_;
   glm::mat4 model_;
-  glm::mat4 rotation_;
+  glm::mat4 rotation_{1.f};
 
   // TODO: storing these for GUI config
   float fov_;
