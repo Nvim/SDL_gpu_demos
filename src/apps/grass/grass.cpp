@@ -3,6 +3,7 @@
 #include "grass.h"
 
 #include "common/pipeline_builder.h"
+#include "common/types.h"
 #include "common/unit_cube.h"
 #include "common/util.h"
 #include <SDL3/SDL_gpu.h>
@@ -326,7 +327,7 @@ GrassProgram::UploadVertexData()
     SDL_GPUBufferCreateInfo ssbo_info{};
     {
       ssbo_info.usage = SDL_GPU_BUFFERUSAGE_GRAPHICS_STORAGE_READ;
-      ssbo_info.size = static_cast<u32>(sizeof(PosVertex) * vert_count);
+      ssbo_info.size = static_cast<u32>(sizeof(PosVertex_Aligned) * vert_count);
     }
     vertex_ssbo_ = SDL_CreateGPUBuffer(Device, &ssbo_info);
     if (!vertex_ssbo_) {
