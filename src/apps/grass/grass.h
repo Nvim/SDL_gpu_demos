@@ -23,11 +23,15 @@ class GrassProgram : public Program
   static constexpr const char* VS_PATH =
     "resources/shaders/compiled/grass.vert.spv";
   static constexpr const char* FS_PATH =
-    "resources/shaders/compiled/color.frag.spv";
+    "resources/shaders/compiled/grass.frag.spv";
+  static constexpr const char* COMP_PATH =
+    "resources/shaders/compiled/generate_grass.comp.spv";
   static constexpr SDL_GPUTextureFormat TARGET_FORMAT =
     SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
   static constexpr SDL_GPUTextureFormat DEPTH_FORMAT =
     SDL_GPU_TEXTUREFORMAT_D16_UNORM;
+
+  static constexpr u32 DISPATCH_SZ = 16;
 
 public:
   GrassProgram(SDL_GPUDevice* device,
@@ -45,6 +49,7 @@ private:
   bool InitGui();
   bool CreateRenderTargets();
   bool CreatePipeline();
+  bool CreateComputePipeline();
   bool UploadVertexData();
   ImDrawData* DrawGui();
 
@@ -62,10 +67,12 @@ private:
   SDL_GPUTexture* depth_target_{ nullptr };
   SDL_GPUTexture* scene_target_{ nullptr };
   SDL_GPUGraphicsPipeline* pipeline_{ nullptr };
+  SDL_GPUComputePipeline* generate_grass_pipeline_{ nullptr };
   SDL_GPUColorTargetInfo scene_color_target_info_{};
   SDL_GPUDepthStencilTargetInfo scene_depth_target_info_{};
   SDL_GPUColorTargetInfo swapchain_target_info_{};
   SDL_GPUBuffer* index_buffer_{ nullptr };
+  SDL_GPUBuffer* instance_buffer_{ nullptr };
   SDL_GPUBuffer* vertex_ssbo_{ nullptr };
 };
 

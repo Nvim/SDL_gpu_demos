@@ -1,0 +1,21 @@
+#version 450
+
+#extension GL_GOOGLE_include_directive : require
+#include "grass_instance.glsl"
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+// layout(std140, set = 2, binding = 0) uniform uSettings {
+//     float time;
+//     float pad_[3];
+// };
+
+layout (set = 1, binding = 0) writeonly buffer InstanceBuffer {
+    GrassInstance Instances[];
+};
+
+void main() {
+    uint idx = gl_GlobalInvocationID.x + (gl_GlobalInvocationID.y * 16);
+    float clamped_idx = clamp(float(idx) / 255.0, 0.0, 1.0);
+    Instances[idx].color = vec3(clamped_idx, clamped_idx, clamped_idx);
+}

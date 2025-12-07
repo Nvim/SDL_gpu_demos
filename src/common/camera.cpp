@@ -49,7 +49,7 @@ Camera::handle_input(f32 delta)
   f32 speed = 8.f * delta;
   f32 sens = 80.f * delta;
   const auto* state = SDL_GetKeyboardState(nullptr);
-  glm::vec3 velocity{0.f};
+  glm::vec3 velocity{ 0.f };
 
   // Movement
   if (state[SDL_SCANCODE_W]) {

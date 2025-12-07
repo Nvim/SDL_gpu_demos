@@ -2,6 +2,8 @@
 
 #include "grass.h"
 
+#include "common/compute_pipeline_builder.h"
+#include "common/logger.h"
 #include "common/pipeline_builder.h"
 #include "common/types.h"
 #include "common/unit_cube.h"
@@ -79,10 +81,51 @@ GrassProgram::Init()
     LOG_CRITICAL("Couldn't create graphics pipeline");
     return false;
   }
+  if (!CreateComputePipeline()) {
+    LOG_CRITICAL("Couldn't create compute pipeline");
+    return false;
+  }
   if (!UploadVertexData()) {
     LOG_CRITICAL("Couldn't create grassblade ssbo & index buffers");
     return false;
   }
+
+  { // Generate grassblades instances:
+    SDL_GPUBufferCreateInfo buf_info{};
+    {
+      buf_info.size =
+        DISPATCH_SZ * DISPATCH_SZ * 16; // 16*16 workgroup, 16 bytes struct
+      buf_info.usage = SDL_GPU_BUFFERUSAGE_COMPUTE_STORAGE_WRITE |
+                       SDL_GPU_BUFFERUSAGE_GRAPHICS_STORAGE_READ;
+    }
+    instance_buffer_ = SDL_CreateGPUBuffer(Device, &buf_info);
+    if (!instance_buffer_) {
+      LOG_CRITICAL("Couldn't create instance buffer: {}", GETERR);
+      return false;
+    }
+
+    SDL_GPUStorageBufferReadWriteBinding b;
+    {
+      b.buffer = instance_buffer_;
+      b.cycle = false;
+    }
+
+    SDL_GPUCommandBuffer* cmd_buf = SDL_AcquireGPUCommandBuffer(Device);
+    if (cmd_buf == NULL) {
+      LOG_CRITICAL("Couldn't acquire command buffer: {}", GETERR);
+      return false;
+    }
+    auto* pass = SDL_BeginGPUComputePass(cmd_buf, nullptr, 0, &b, 1);
+    SDL_BindGPUComputePipeline(pass, generate_grass_pipeline_);
+    SDL_BindGPUComputeStorageBuffers(pass, 0, &instance_buffer_, 1);
+    SDL_DispatchGPUCompute(pass, DISPATCH_SZ, DISPATCH_SZ, 1);
+    SDL_EndGPUComputePass(pass);
+    if (!SDL_SubmitGPUCommandBuffer(cmd_buf)) {
+      LOG_CRITICAL("Instance buffer generation failed: {}", GETERR);
+      return false;
+    }
+  }
+
   return true;
 }
 
@@ -157,12 +200,13 @@ GrassProgram::Draw()
     SDL_PushGPUVertexUniformData(cmdbuf, 0, &camera_bind, sizeof(camera_bind));
     SDL_PushGPUVertexUniformData(
       cmdbuf, 1, &instance_bind, sizeof(instance_bind));
-    // SDL_BindGPUVertexBuffers(scene_pass, 0, &vert_bind, 1);
     SDL_BindGPUVertexStorageBuffers(scene_pass, 0, &vertex_ssbo_, 1);
+    SDL_BindGPUVertexStorageBuffers(scene_pass, 1, &instance_buffer_, 1);
     SDL_BindGPUIndexBuffer(
       scene_pass, &idx_bind, SDL_GPU_INDEXELEMENTSIZE_16BIT);
 
-    SDL_DrawGPUIndexedPrimitives(scene_pass, UnitCube::IndexCount, 1, 0, 0, 0);
+    SDL_DrawGPUIndexedPrimitives(
+      scene_pass, UnitCube::IndexCount, DISPATCH_SZ * DISPATCH_SZ, 0, 0, 0);
 
     skybox_.Draw(cmdbuf, scene_pass, camera_bind);
 
@@ -273,7 +317,7 @@ bool
 GrassProgram::CreatePipeline()
 {
   LOG_TRACE("GrassProgram::CreatePipeline");
-  auto vert = LoadShader(VS_PATH, Device, 0, 2, 1, 0);
+  auto vert = LoadShader(VS_PATH, Device, 0, 2, 2, 0);
   if (vert == nullptr) {
     LOG_ERROR("Couldn't load vertex shader at path {}", VS_PATH);
     return false;
@@ -302,6 +346,28 @@ GrassProgram::CreatePipeline()
 
   SDL_ReleaseGPUShader(Device, frag);
   SDL_ReleaseGPUShader(Device, vert);
+  return true;
+}
+
+bool
+GrassProgram::CreateComputePipeline()
+{
+  LOG_TRACE("CubeProgram::CreateComputePipeline");
+
+  ComputePipelineBuilder builder{};
+  generate_grass_pipeline_ = builder //
+                               .SetReadOnlyStorageTextureCount(0)
+                               .SetReadWriteStorageTextureCount(0)
+                               .SetReadWriteStorageBufferCount(1)
+                               .SetUBOCount(0)
+                               .SetThreadCount(DISPATCH_SZ, DISPATCH_SZ, 1)
+                               .SetShader(COMP_PATH)
+                               .Build(Device);
+
+  if (generate_grass_pipeline_ == nullptr) {
+    LOG_ERROR("Couldn't create compute pipeline: {}", GETERR);
+    return false;
+  }
   return true;
 }
 
@@ -365,7 +431,8 @@ GrassProgram::DrawGui()
     ImGui::Text("Rendertarget Height: %d", rendertarget_h_);
     if (ImGui::TreeNode("Camera")) {
       ImGui::Text("Position");
-      if (ImGui::SliderFloat3("Translation", (f32*)&camera_.Position, -50.f, 50.f)) {
+      if (ImGui::SliderFloat3(
+            "Translation", (f32*)&camera_.Position, -50.f, 50.f)) {
         camera_.Moved = true;
       }
       ImGui::Text("Rotation");
