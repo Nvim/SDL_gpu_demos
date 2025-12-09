@@ -10,12 +10,16 @@ layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 //     float pad_[3];
 // };
 
-layout (set = 1, binding = 0) writeonly buffer InstanceBuffer {
+layout(set = 1, binding = 0) writeonly buffer InstanceBuffer {
     GrassInstance Instances[];
 };
 
 void main() {
     uint idx = gl_GlobalInvocationID.x + (gl_GlobalInvocationID.y * 16);
-    float clamped_idx = clamp(float(idx) / 255.0, 0.0, 1.0);
-    Instances[idx].color = vec3(clamped_idx, clamped_idx, clamped_idx);
+    float clamped_idx = clamp(float(idx) / 200.0, 0.0, 1.0);
+    Instances[idx].color = vec3(clamped_idx * 0.2, clamped_idx, clamped_idx * 0.3);
+    Instances[idx].world_pos = vec3(
+            gl_GlobalInvocationID.x * 3.f,
+            0.f,
+            gl_GlobalInvocationID.y * 3.f);
 }

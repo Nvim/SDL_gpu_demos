@@ -24,29 +24,21 @@ layout(std140, set = 1, binding = 0) uniform uCamera {
     vec4 camera_world;
 };
 
-layout(std140, set = 1, binding = 1) uniform uInstanceData {
-    mat4 mat_m;
-};
+mat4 modelFromWorldPos(in vec3 worldPos) {
+    mat4 m = mat4(1.0);
+    m[3] = vec4(worldPos, 1.0);
+    return m;
+}
 
 void main()
 {
-    const uint dimension = 16;
-    const uint spread = 5;
     Vertex vert = Vertices[gl_VertexIndex];
-    GrassInstance instanceData = Instances[gl_InstanceIndex];
+    GrassInstance instance = Instances[gl_InstanceIndex];
+
     vec3 inPos = vert.position;
+    mat4 mat_m = modelFromWorldPos(instance.world_pos);
     vec4 relative_pos = mat_m * vec4(inPos, 1.0);
 
-    uint instance = gl_InstanceIndex;
-    uint square = dimension * dimension;
-
-    relative_pos.x += float(instance % dimension) * spread;
-    relative_pos.z += int(floor(float(instance / dimension))) % dimension * spread;
-    //
-    relative_pos.x -= dimension * 2;
-    relative_pos.z -= dimension * 2;
-
-    // outFragPos = relative_pos.xyz;
-    OutFragColor = instanceData.color;
+    OutFragColor = instance.color;
     gl_Position = mat_viewproj * relative_pos;
 }

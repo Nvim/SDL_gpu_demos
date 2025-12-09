@@ -31,7 +31,7 @@ class GrassProgram : public Program
   static constexpr SDL_GPUTextureFormat DEPTH_FORMAT =
     SDL_GPU_TEXTUREFORMAT_D16_UNORM;
 
-  static constexpr u32 DISPATCH_SZ = 16;
+  static constexpr u32 GRID_SZ = 16;
 
 public:
   GrassProgram(SDL_GPUDevice* device,

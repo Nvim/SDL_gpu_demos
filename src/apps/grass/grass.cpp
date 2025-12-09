@@ -94,7 +94,7 @@ GrassProgram::Init()
     SDL_GPUBufferCreateInfo buf_info{};
     {
       buf_info.size =
-        DISPATCH_SZ * DISPATCH_SZ * 16; // 16*16 workgroup, 16 bytes struct
+        GRID_SZ * GRID_SZ * 32; // 16*16 grid, 32 bytes struct
       buf_info.usage = SDL_GPU_BUFFERUSAGE_COMPUTE_STORAGE_WRITE |
                        SDL_GPU_BUFFERUSAGE_GRAPHICS_STORAGE_READ;
     }
@@ -118,7 +118,7 @@ GrassProgram::Init()
     auto* pass = SDL_BeginGPUComputePass(cmd_buf, nullptr, 0, &b, 1);
     SDL_BindGPUComputePipeline(pass, generate_grass_pipeline_);
     SDL_BindGPUComputeStorageBuffers(pass, 0, &instance_buffer_, 1);
-    SDL_DispatchGPUCompute(pass, DISPATCH_SZ, DISPATCH_SZ, 1);
+    SDL_DispatchGPUCompute(pass, 1, 1, 1);
     SDL_EndGPUComputePass(pass);
     if (!SDL_SubmitGPUCommandBuffer(cmd_buf)) {
       LOG_CRITICAL("Instance buffer generation failed: {}", GETERR);
@@ -187,26 +187,17 @@ GrassProgram::Draw()
       .camera_world = glm::vec4{ camera_.Position, 1.f },
     };
 
-    struct
-    {
-      glm::mat4 model;
-    } instance_bind{
-      glm::identity<glm::mat4>(),
-    };
-
     SDL_SetGPUViewport(scene_pass, &scene_vp);
 
     SDL_BindGPUGraphicsPipeline(scene_pass, pipeline_);
     SDL_PushGPUVertexUniformData(cmdbuf, 0, &camera_bind, sizeof(camera_bind));
-    SDL_PushGPUVertexUniformData(
-      cmdbuf, 1, &instance_bind, sizeof(instance_bind));
     SDL_BindGPUVertexStorageBuffers(scene_pass, 0, &vertex_ssbo_, 1);
     SDL_BindGPUVertexStorageBuffers(scene_pass, 1, &instance_buffer_, 1);
     SDL_BindGPUIndexBuffer(
       scene_pass, &idx_bind, SDL_GPU_INDEXELEMENTSIZE_16BIT);
 
     SDL_DrawGPUIndexedPrimitives(
-      scene_pass, UnitCube::IndexCount, DISPATCH_SZ * DISPATCH_SZ, 0, 0, 0);
+      scene_pass, UnitCube::IndexCount, GRID_SZ * GRID_SZ, 0, 0, 0);
 
     skybox_.Draw(cmdbuf, scene_pass, camera_bind);
 
@@ -317,7 +308,7 @@ bool
 GrassProgram::CreatePipeline()
 {
   LOG_TRACE("GrassProgram::CreatePipeline");
-  auto vert = LoadShader(VS_PATH, Device, 0, 2, 2, 0);
+  auto vert = LoadShader(VS_PATH, Device, 0, 1, 2, 0);
   if (vert == nullptr) {
     LOG_ERROR("Couldn't load vertex shader at path {}", VS_PATH);
     return false;
@@ -360,7 +351,7 @@ GrassProgram::CreateComputePipeline()
                                .SetReadWriteStorageTextureCount(0)
                                .SetReadWriteStorageBufferCount(1)
                                .SetUBOCount(0)
-                               .SetThreadCount(DISPATCH_SZ, DISPATCH_SZ, 1)
+                               .SetThreadCount(GRID_SZ, GRID_SZ, 1)
                                .SetShader(COMP_PATH)
                                .Build(Device);
 
