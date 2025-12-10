@@ -123,7 +123,7 @@ GLTFLoader::Release()
 }
 
 UniquePtr<GLTFScene>
-GLTFLoader::Load(std::filesystem::path& path)
+GLTFLoader::Load(const std::filesystem::path& path)
 {
   LOG_TRACE("GLTFLoader::Load");
   if (!std::filesystem::exists(path)) {
@@ -183,7 +183,7 @@ GLTFLoader::Load(GLTFScene* scene, std::filesystem::path& path)
 }
 
 bool
-GLTFLoader::Parse(std::filesystem::path& path)
+GLTFLoader::Parse(const std::filesystem::path& path)
 {
   auto data = fastgltf::GltfDataBuffer::FromPath(path);
   if (data.error() != fastgltf::Error::None) {
@@ -193,7 +193,6 @@ GLTFLoader::Parse(std::filesystem::path& path)
 
   constexpr auto gltfOptions = fastgltf::Options::LoadExternalBuffers;
 
-  fastgltf::Asset gltf;
   fastgltf::Parser parser{};
 
   auto asset = parser.loadGltf(data.get(), path.parent_path(), gltfOptions);
@@ -397,6 +396,70 @@ GLTFLoader::LoadVertexData(GLTFScene* ret)
       return false;
     }
     ret->meshes_.emplace_back(newMesh);
+  }
+  return true;
+}
+
+bool
+GLTFLoader::LoadPositions(const std::filesystem::path& path,
+                          std::vector<PosVertex_Aligned>& vertices,
+                          std::vector<u32>& indices,
+                          u32 mesh_idx)
+{
+  LOG_TRACE("GLTFLoader::LoadPositions");
+
+  auto data = fastgltf::GltfDataBuffer::FromPath(path);
+  if (data.error() != fastgltf::Error::None) {
+    LOG_ERROR("couldn't load gltf from path");
+    return false;
+  }
+
+  constexpr auto gltfOptions = fastgltf::Options::LoadExternalBuffers;
+  fastgltf::Parser parser{};
+
+  auto expected_asset =
+    parser.loadGltf(data.get(), path.parent_path(), gltfOptions);
+  if (auto error = expected_asset.error(); error != fastgltf::Error::None) {
+    LOG_ERROR("couldn't parse binary gltf");
+    return false;
+  }
+
+  if (auto error = fastgltf::validate(expected_asset.get());
+      error != fastgltf::Error::None) {
+    LOG_ERROR("couldn't validate gltf");
+    return false;
+  }
+  auto& asset = expected_asset.get();
+
+  if (asset.meshes.empty()) {
+    LOG_WARN("LoadVertexData: GLTF has no meshes");
+    return false;
+  }
+
+  if (asset.meshes.size() <= mesh_idx) {
+    LOG_WARN("Mesh index is too big");
+    return false;
+  }
+
+  auto& mesh = asset.meshes[mesh_idx];
+
+  for (auto&& p : mesh.primitives) {
+    { // load indexes
+      fastgltf::Accessor& acc = asset.accessors[p.indicesAccessor.value()];
+      indices.reserve(acc.count);
+
+      fastgltf::iterateAccessor<u32>(
+        asset, acc, [&](u32 idx) { indices.push_back(idx); });
+    }
+
+    { // load positions
+      fastgltf::Accessor& acc =
+        asset.accessors[p.findAttribute("POSITION")->accessorIndex];
+      vertices.resize(acc.count);
+
+      fastgltf::iterateAccessorWithIndex<glm::vec3>(
+        asset, acc, [&](glm::vec3 v, u32 idx) { vertices[idx].pos = v; });
+    }
   }
   return true;
 }

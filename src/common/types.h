@@ -51,7 +51,7 @@ struct PosVertex
 
 struct PosVertex_Aligned
 {
-  float pos[3];
+  glm::vec3 pos;
   float pad_;
 };
 

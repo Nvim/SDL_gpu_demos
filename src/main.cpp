@@ -32,7 +32,7 @@ main()
   }
   LOG_DEBUG("Created Device");
 
-  auto Window = SDL_CreateWindow("Cool program", 1600, 1200, 0);
+  auto Window = SDL_CreateWindow("Cool program", 1200, 900, 0);
   if (Window == NULL) {
     LOG_ERROR("Couldn't create SDL window: {}", SDL_GetError());
     return -1;
@@ -51,7 +51,7 @@ main()
       LOG_CRITICAL("Couldn't initialize engine");
       return -1;
     }
-    grass::GrassProgram app{ Device, Window, &engine, 1600, 1200 };
+    grass::GrassProgram app{ Device, Window, &engine, 1200, 900 };
     // CubeProgram app{ Device, Window, &engine, 1600, 1200 };
 
     if (!app.Init()) {

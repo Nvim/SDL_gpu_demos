@@ -26,7 +26,11 @@ public:
   ~GLTFLoader();
 
   bool Load(GLTFScene* scene, std::filesystem::path& path);
-  UniquePtr<GLTFScene> Load(std::filesystem::path& path);
+  UniquePtr<GLTFScene> Load(const std::filesystem::path& path);
+  static bool LoadPositions(const std::filesystem::path& path,
+                            std::vector<PosVertex_Aligned>& vertices,
+                            std::vector<u32>& indices,
+                            u32 mesh_idx);
   void Release(); // Callable dtor, must be destroyed before app
 
 public:
@@ -43,7 +47,7 @@ private:
   bool LoadMaterials(GLTFScene* ret);
   bool LoadNodes(GLTFScene* ret);
 
-  bool Parse(std::filesystem::path& path);
+  bool Parse(const std::filesystem::path& path);
   bool LoadResources(GLTFScene* ret);
 
   // TODO: some of these utils should be moved somewhere else

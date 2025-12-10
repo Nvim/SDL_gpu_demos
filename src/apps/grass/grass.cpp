@@ -3,10 +3,10 @@
 #include "grass.h"
 
 #include "common/compute_pipeline_builder.h"
+#include "common/gltf_loader.h"
 #include "common/logger.h"
 #include "common/pipeline_builder.h"
 #include "common/types.h"
-#include "common/unit_cube.h"
 #include "common/util.h"
 #include <SDL3/SDL_gpu.h>
 
@@ -14,6 +14,7 @@
 #include <imgui/backends/imgui_impl_sdl3.h>
 #include <imgui/backends/imgui_impl_sdlgpu3.h>
 #include <imgui/imgui.h>
+#include <vector>
 
 namespace grass {
 GrassProgram::GrassProgram(SDL_GPUDevice* device,
@@ -85,6 +86,7 @@ GrassProgram::Init()
     LOG_CRITICAL("Couldn't create compute pipeline");
     return false;
   }
+
   if (!UploadVertexData()) {
     LOG_CRITICAL("Couldn't create grassblade ssbo & index buffers");
     return false;
@@ -93,8 +95,7 @@ GrassProgram::Init()
   { // Generate grassblades instances:
     SDL_GPUBufferCreateInfo buf_info{};
     {
-      buf_info.size =
-        GRID_SZ * GRID_SZ * 32; // 16*16 grid, 32 bytes struct
+      buf_info.size = GRID_SZ * GRID_SZ * 32; // 16*16 grid, 32 bytes struct
       buf_info.usage = SDL_GPU_BUFFERUSAGE_COMPUTE_STORAGE_WRITE |
                        SDL_GPU_BUFFERUSAGE_GRAPHICS_STORAGE_READ;
     }
@@ -194,10 +195,10 @@ GrassProgram::Draw()
     SDL_BindGPUVertexStorageBuffers(scene_pass, 0, &vertex_ssbo_, 1);
     SDL_BindGPUVertexStorageBuffers(scene_pass, 1, &instance_buffer_, 1);
     SDL_BindGPUIndexBuffer(
-      scene_pass, &idx_bind, SDL_GPU_INDEXELEMENTSIZE_16BIT);
+      scene_pass, &idx_bind, SDL_GPU_INDEXELEMENTSIZE_32BIT);
 
     SDL_DrawGPUIndexedPrimitives(
-      scene_pass, UnitCube::IndexCount, GRID_SZ * GRID_SZ, 0, 0, 0);
+      scene_pass, index_count_, GRID_SZ * GRID_SZ, 0, 0, 0);
 
     skybox_.Draw(cmdbuf, scene_pass, camera_bind);
 
@@ -366,13 +367,23 @@ bool
 GrassProgram::UploadVertexData()
 {
   LOG_TRACE("GrassProgram::UploadVertexData");
-  auto vert_count = UnitCube::VertCount;
-  auto idx_count = UnitCube::IndexCount;
+  std::vector<PosVertex_Aligned> vertices{};
+  std::vector<u32> indices{};
+
+  if (!GLTFLoader::LoadPositions(GRASS_PATH, vertices, indices, 0)) {
+    LOG_ERROR("Couldn't load vertex data");
+    return false;
+  }
+
+  auto vert_count = vertices.size();
+  index_count_ = indices.size();
+  LOG_DEBUG(
+    "Grassblade has {} vertices and {} indices", vert_count, index_count_);
   {
     SDL_GPUBufferCreateInfo idxInfo{};
     {
       idxInfo.usage = SDL_GPU_BUFFERUSAGE_INDEX;
-      idxInfo.size = static_cast<u32>(sizeof(u16) * idx_count);
+      idxInfo.size = static_cast<u32>(sizeof(u32) * index_count_);
     }
     index_buffer_ = SDL_CreateGPUBuffer(Device, &idxInfo);
     if (!index_buffer_) {
@@ -392,12 +403,11 @@ GrassProgram::UploadVertexData()
       return false;
     }
   }
-  if (!EnginePtr->UploadToBuffer(index_buffer_, UnitCube::Indices, idx_count)) {
+  if (!EnginePtr->UploadToBuffer(index_buffer_, indices.data(), index_count_)) {
     LOG_ERROR("Couldn't upload index buffer data");
     return false;
   }
-  if (!EnginePtr->UploadToBuffer(
-        vertex_ssbo_, UnitCube::Verts_Aligned, vert_count)) {
+  if (!EnginePtr->UploadToBuffer(vertex_ssbo_, vertices.data(), vert_count)) {
     LOG_ERROR("Couldn't upload vertices ssbo data");
     return false;
   }

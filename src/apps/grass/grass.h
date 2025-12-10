@@ -20,6 +20,7 @@ class GrassProgram : public Program
   const path SKYBOX_PATH{
     "resources/textures/plains_sunset/plains_sunset_4k.hdr"
   };
+  const path GRASS_PATH{ "resources/models/single_grass_blade.glb" };
   static constexpr const char* VS_PATH =
     "resources/shaders/compiled/grass.vert.spv";
   static constexpr const char* FS_PATH =
@@ -60,6 +61,7 @@ private:
   i32 rendertarget_w_;
   i32 rendertarget_h_;
   u32 grid_size_{ 32 };
+  u32 index_count_{ 0 };
   Camera camera_{};
   Skybox skybox_{ SKYBOX_PATH, EnginePtr, TARGET_FORMAT };
 

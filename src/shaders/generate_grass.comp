@@ -16,10 +16,10 @@ layout(set = 1, binding = 0) writeonly buffer InstanceBuffer {
 
 void main() {
     uint idx = gl_GlobalInvocationID.x + (gl_GlobalInvocationID.y * 16);
-    float clamped_idx = clamp(float(idx) / 200.0, 0.0, 1.0);
+    float clamped_idx = clamp(float(idx) / 100.0, 0.0, 1.0);
     Instances[idx].color = vec3(clamped_idx * 0.2, clamped_idx, clamped_idx * 0.3);
     Instances[idx].world_pos = vec3(
-            gl_GlobalInvocationID.x * 3.f,
+            gl_GlobalInvocationID.x,
             0.f,
-            gl_GlobalInvocationID.y * 3.f);
+            gl_GlobalInvocationID.y);
 }
