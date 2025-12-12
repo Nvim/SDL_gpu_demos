@@ -402,7 +402,7 @@ GLTFLoader::LoadVertexData(GLTFScene* ret)
 
 bool
 GLTFLoader::LoadPositions(const std::filesystem::path& path,
-                          std::vector<PosVertex_Aligned>& vertices,
+                          std::vector<PosNormalVertex_Aligned>& vertices,
                           std::vector<u32>& indices,
                           u32 mesh_idx)
 {
@@ -459,6 +459,16 @@ GLTFLoader::LoadPositions(const std::filesystem::path& path,
 
       fastgltf::iterateAccessorWithIndex<glm::vec3>(
         asset, acc, [&](glm::vec3 v, u32 idx) { vertices[idx].pos = v; });
+    }
+
+    { // load normals:
+      auto attr = p.findAttribute("NORMAL");
+      if (attr != p.attributes.end()) {
+        fastgltf::iterateAccessorWithIndex<glm::vec3>(
+          asset,
+          asset.accessors[attr->accessorIndex],
+          [&](glm::vec3 v, size_t idx) { vertices[idx].normal = v; });
+      }
     }
   }
   return true;

@@ -5,10 +5,15 @@
 
 struct Vertex {
     vec3 position;
-    float pad_;
+    float pad_0;
+    vec3 normal;
+    float pad_1;
 };
 
 layout(location = 0) out vec3 OutFragColor;
+layout(location = 1) out vec3 OutViewPos;
+layout(location = 2) out vec3 OutFragPos;
+layout(location = 3) out vec3 OutNormal;
 
 layout(std430, set = 0, binding = 0) buffer VertexBuffer {
     Vertex Vertices[];
@@ -40,5 +45,8 @@ void main()
     vec4 relative_pos = mat_m * vec4(inPos, 1.0);
 
     OutFragColor = instance.color;
+    OutFragPos = relative_pos.xyz;
+    OutViewPos = camera_world.xyz;
+    OutNormal = (vert.normal + vec3(1.0)) / vec3(2.0);
     gl_Position = mat_viewproj * relative_pos;
 }

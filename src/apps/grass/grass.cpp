@@ -367,7 +367,7 @@ bool
 GrassProgram::UploadVertexData()
 {
   LOG_TRACE("GrassProgram::UploadVertexData");
-  std::vector<PosVertex_Aligned> vertices{};
+  std::vector<PosNormalVertex_Aligned> vertices{};
   std::vector<u32> indices{};
 
   if (!GLTFLoader::LoadPositions(GRASS_PATH, vertices, indices, 0)) {
@@ -395,7 +395,8 @@ GrassProgram::UploadVertexData()
     SDL_GPUBufferCreateInfo ssbo_info{};
     {
       ssbo_info.usage = SDL_GPU_BUFFERUSAGE_GRAPHICS_STORAGE_READ;
-      ssbo_info.size = static_cast<u32>(sizeof(PosVertex_Aligned) * vert_count);
+      ssbo_info.size =
+        static_cast<u32>(sizeof(PosNormalVertex_Aligned) * vert_count);
     }
     vertex_ssbo_ = SDL_CreateGPUBuffer(Device, &ssbo_info);
     if (!vertex_ssbo_) {

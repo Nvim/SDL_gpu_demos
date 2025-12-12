@@ -1,7 +1,6 @@
 #pragma once
 
 #include "common/program.h"
-#include "common/rendersystem.h"
 #include "common/skybox.h"
 #include "common/types.h"
 
@@ -17,9 +16,7 @@ class GrassProgram : public Program
 {
   using path = std::filesystem::path;
 
-  const path SKYBOX_PATH{
-    "resources/textures/plains_sunset/plains_sunset_4k.hdr"
-  };
+  const path SKYBOX_PATH{ "resources/textures/puresky.hdr" };
   const path GRASS_PATH{ "resources/models/single_grass_blade.glb" };
   static constexpr const char* VS_PATH =
     "resources/shaders/compiled/grass.vert.spv";

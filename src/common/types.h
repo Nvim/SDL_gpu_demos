@@ -55,6 +55,14 @@ struct PosVertex_Aligned
   float pad_;
 };
 
+struct PosNormalVertex_Aligned
+{
+  glm::vec3 pos;
+  float pad_0;
+  glm::vec3 normal;
+  float pad_1;
+};
+
 struct PosColVertex
 {
   float poscol[6];
