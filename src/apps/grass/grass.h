@@ -61,6 +61,7 @@ private:
   u32 index_count_{ 0 };
   Camera camera_{};
   Skybox skybox_{ SKYBOX_PATH, EnginePtr, TARGET_FORMAT };
+  DirLightBinding sunlight_;
 
   // GPU Resources:
   SDL_GPUTexture* depth_target_{ nullptr };

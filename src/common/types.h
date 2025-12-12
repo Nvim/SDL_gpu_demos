@@ -105,6 +105,17 @@ struct CameraBinding
   glm::vec4 camera_world;
 };
 
+struct DirLightBinding
+{
+  glm::vec3 direction = { 10.f, 10.f, 10.f };
+  f32 pad_0;
+  glm::vec3 ambient = { .2f, .2f, .2f };
+  f32 pad_1;
+  glm::vec3 diffuse = { .8f, .8f, .8f };
+  f32 pad_2;
+  glm::vec3 specular = { .8f, .8f, .8f };
+};
+
 class TransferBufferWrapper
 {
 private:

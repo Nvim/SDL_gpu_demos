@@ -8,29 +8,25 @@ layout(location = 3) in vec3 inNormal;
 
 struct DirLight {
     vec3 direction;
+    float pad_1;
     vec3 ambient;
+    float pad_2;
     vec3 diffuse;
+    float pad_3;
     vec3 specular;
 };
 
-// layout(std140, set = 3, binding = 0) uniform uDirLight {
-//     DirLight sun;
-// };
+layout(std140, set = 3, binding = 0) uniform uDirLight {
+    DirLight sun;
+};
 
 void main()
 {
-    const DirLight sun =
-        {
-            vec3(-10.f, 10.f, -10.f),
-            vec3(.3f, .3f, .3f),
-            vec3(1.f, 1.f, 1.f),
-            vec3(.6f, .6f, .6f)
-        };
     vec3 normal = normalize(inNormal);
 
     vec3 ambient = sun.ambient * inColor;
 
-    vec3 light_dir = normalize(-sun.direction);
+    vec3 light_dir = normalize(sun.direction);
     float diffuse_factor = max(dot(normal, light_dir), 0.f);
     vec3 diffuse = sun.diffuse * diffuse_factor * inColor;
 

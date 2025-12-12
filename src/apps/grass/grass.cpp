@@ -192,6 +192,7 @@ GrassProgram::Draw()
 
     SDL_BindGPUGraphicsPipeline(scene_pass, pipeline_);
     SDL_PushGPUVertexUniformData(cmdbuf, 0, &camera_bind, sizeof(camera_bind));
+    SDL_PushGPUFragmentUniformData(cmdbuf, 0, &sunlight_, sizeof(sunlight_));
     SDL_BindGPUVertexStorageBuffers(scene_pass, 0, &vertex_ssbo_, 1);
     SDL_BindGPUVertexStorageBuffers(scene_pass, 1, &instance_buffer_, 1);
     SDL_BindGPUIndexBuffer(
@@ -314,7 +315,7 @@ GrassProgram::CreatePipeline()
     LOG_ERROR("Couldn't load vertex shader at path {}", VS_PATH);
     return false;
   }
-  auto frag = LoadShader(FS_PATH, Device, 0, 0, 0, 0);
+  auto frag = LoadShader(FS_PATH, Device, 0, 1, 0, 0);
   if (frag == nullptr) {
     LOG_ERROR("Couldn't load fragment shader at path {}", FS_PATH);
     return false;
@@ -442,6 +443,15 @@ GrassProgram::DrawGui()
           ImGui::SliderFloat("Pitch", (float*)&camera_.Pitch, -90.f, 90.f)) {
         camera_.Rotated = true;
       }
+      ImGui::TreePop();
+    }
+    if (ImGui::TreeNode("Lighting")) {
+      ImGui::Text("Sun:");
+      ImGui::SliderFloat3("Position:", (f32*)&sunlight_.direction, 1.f, 50.f);
+      ImGui::ColorEdit3("Ambient:", (f32*)&sunlight_.ambient);
+      ImGui::ColorEdit3(
+        "Diffuse:", (f32*)&sunlight_.diffuse, ImGuiColorEditFlags_Float);
+      ImGui::ColorEdit3("Specular:", (f32*)&sunlight_.specular);
       ImGui::TreePop();
     }
     ImGui::End();

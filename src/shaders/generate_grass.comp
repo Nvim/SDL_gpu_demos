@@ -19,7 +19,7 @@ void main() {
     uint idx = gl_GlobalInvocationID.x + (gl_GlobalInvocationID.y * 16);
     float clamped_idx = clamp(float(idx) / 100.0, 0.0, 1.0);
     // Instances[idx].color = vec3(clamped_idx * 0.2, clamped_idx, clamped_idx * 0.3);
-    Instances[idx].color = vec3(.2f, .75f, .1f);
+    Instances[idx].color = vec3(.36f, .909f, .21f);
     Instances[idx].world_pos = vec3(
             gl_GlobalInvocationID.x / density,
             0.f,

@@ -26,6 +26,7 @@ layout(std430, set = 0, binding = 1) readonly buffer InstanceBuffer {
 // Data global to whole scene (120 bytes data, 8 to pad)
 layout(std140, set = 1, binding = 0) uniform uCamera {
     mat4 mat_viewproj;
+    mat4 mat_cam;
     vec4 camera_world;
 };
 
@@ -47,6 +48,6 @@ void main()
     OutFragColor = instance.color;
     OutFragPos = relative_pos.xyz;
     OutViewPos = camera_world.xyz;
-    OutNormal = (vert.normal + vec3(1.0)) / vec3(2.0);
+    OutNormal = mat3(transpose(inverse(mat_m))) * vert.normal;  
     gl_Position = mat_viewproj * relative_pos;
 }
