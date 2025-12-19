@@ -36,6 +36,23 @@ mat4 modelFromWorldPos(in vec3 worldPos) {
     return m;
 }
 
+mat4 rotateY(float angle)
+{
+    float c = cos(angle);
+    float s = sin(angle);
+
+    // |  c   0   s   0 |
+    // |  0   1   0   0 |
+    // | -s   0   c   0 |
+    // |  0   0   0   1 |
+    return mat4(
+        vec4(c, 0.f, -s, 0.f), // column 0
+        vec4(0.f, 1.f, 0.f, 0.f), // column 1
+        vec4(s, 0.f, c, 0.f), // column 2
+        vec4(0.f, 0.f, 0.f, 1.f) // column 3
+    );
+}
+
 void main()
 {
     Vertex vert = Vertices[gl_VertexIndex];
@@ -43,11 +60,12 @@ void main()
 
     vec3 inPos = vert.position;
     mat4 mat_m = modelFromWorldPos(instance.world_pos);
+    mat_m *= rotateY(instance.rotation);
     vec4 relative_pos = mat_m * vec4(inPos, 1.0);
 
     OutFragColor = instance.color;
     OutFragPos = relative_pos.xyz;
     OutViewPos = camera_world.xyz;
-    OutNormal = mat3(transpose(inverse(mat_m))) * vert.normal;  
+    OutNormal = mat3(transpose(inverse(mat_m))) * vert.normal;
     gl_Position = mat_viewproj * relative_pos;
 }

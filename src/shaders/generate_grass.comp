@@ -14,12 +14,17 @@ layout(set = 1, binding = 0) writeonly buffer InstanceBuffer {
     GrassInstance Instances[];
 };
 
+float rand(float x){
+    return fract(sin(x) * 100000.f);
+}
+
 void main() {
     const float density = 5.f;
     uint idx = gl_GlobalInvocationID.x + (gl_GlobalInvocationID.y * 16);
     float clamped_idx = clamp(float(idx) / 100.0, 0.0, 1.0);
     // Instances[idx].color = vec3(clamped_idx * 0.2, clamped_idx, clamped_idx * 0.3);
     Instances[idx].color = vec3(.36f, .909f, .21f);
+    Instances[idx].rotation = rand(idx);
     Instances[idx].world_pos = vec3(
             gl_GlobalInvocationID.x / density,
             0.f,
