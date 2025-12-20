@@ -1,5 +1,6 @@
 #pragma once
 
+#include "common/grid.h"
 #include "common/program.h"
 #include "common/skybox.h"
 #include "common/types.h"
@@ -61,6 +62,7 @@ private:
   u32 index_count_{ 0 };
   Camera camera_{};
   Skybox skybox_{ SKYBOX_PATH, EnginePtr, TARGET_FORMAT };
+  Grid grid_{EnginePtr, TARGET_FORMAT};
   DirLightBinding sunlight_;
 
   // GPU Resources:

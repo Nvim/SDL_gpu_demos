@@ -14,6 +14,8 @@ glslang $SRC/cubemap_projection.frag -V -o $OUT/cubemap_projection.frag.spv;
 glslang $SRC/cubemap_projection.vert -V -o $OUT/cubemap_projection.vert.spv;
 glslang $SRC/grass.vert -V -o $OUT/grass.vert.spv;
 glslang $SRC/grass.frag -V -o $OUT/grass.frag.spv;
+glslang $SRC/grid.vert -V -o $OUT/grid.vert.spv;
+glslang $SRC/grid.frag -V -o $OUT/grid.frag.spv;
 glslang $SRC/generate_grass.comp -V -o $OUT/generate_grass.comp.spv;
 
 glslang $SRC/post_process.comp -V -o $OUT/post_process.comp.spv;

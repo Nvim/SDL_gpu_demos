@@ -2,6 +2,7 @@
 
 #extension GL_GOOGLE_include_directive : require
 #include "grass_instance.glsl"
+#include "camera_binding.glsl"
 
 struct Vertex {
     vec3 position;
@@ -23,11 +24,8 @@ layout(std430, set = 0, binding = 1) readonly buffer InstanceBuffer {
     GrassInstance Instances[];
 };
 
-// Data global to whole scene (120 bytes data, 8 to pad)
 layout(std140, set = 1, binding = 0) uniform uCamera {
-    mat4 mat_viewproj;
-    mat4 mat_cam;
-    vec4 camera_world;
+    CameraBinding camera;
 };
 
 mat4 modelFromWorldPos(in vec3 worldPos) {
@@ -65,7 +63,7 @@ void main()
 
     OutFragColor = instance.color;
     OutFragPos = relative_pos.xyz;
-    OutViewPos = camera_world.xyz;
+    OutViewPos = camera.world_pos.xyz;
     OutNormal = mat3(transpose(inverse(mat_m))) * vert.normal;
-    gl_Position = mat_viewproj * relative_pos;
+    gl_Position = camera.viewproj * relative_pos;
 }

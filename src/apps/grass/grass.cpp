@@ -29,8 +29,11 @@ GrassProgram::GrassProgram(SDL_GPUDevice* device,
   rendertarget_h_ = window_h_ * (3 / 4.f);
   rendertarget_w_ = window_w_ * (3 / 4.f);
   camera_.SetAspect((f32)rendertarget_w_ / (f32)rendertarget_h_);
+  camera_.Position = { 2.5, 1.25, 4.5 };
+  camera_.Pitch = -13.f;
+  camera_.Yaw = -25.f;
   {
-    scene_color_target_info_.clear_color = { .2f, 1.f, .7f, 1.f };
+    scene_color_target_info_.clear_color = { .85f, .85f, .85f, 1.f };
     scene_color_target_info_.load_op = SDL_GPU_LOADOP_CLEAR;
     scene_color_target_info_.store_op = SDL_GPU_STOREOP_STORE;
   }
@@ -72,6 +75,14 @@ GrassProgram::Init()
   LOG_TRACE("GrassProgram::Init");
   if (!InitGui()) {
     LOG_CRITICAL("Couldn't initialize ImGui");
+    return false;
+  }
+  if (!skybox_.IsLoaded()) {
+    LOG_CRITICAL("Couldn't load skybox");
+    return false;
+  }
+  if (!grid_.IsLoaded()) {
+    LOG_CRITICAL("Couldn't load grid");
     return false;
   }
   if (!CreateRenderTargets()) {
@@ -190,6 +201,7 @@ GrassProgram::Draw()
 
     SDL_SetGPUViewport(scene_pass, &scene_vp);
 
+
     SDL_BindGPUGraphicsPipeline(scene_pass, pipeline_);
     SDL_PushGPUVertexUniformData(cmdbuf, 0, &camera_bind, sizeof(camera_bind));
     SDL_PushGPUFragmentUniformData(cmdbuf, 0, &sunlight_, sizeof(sunlight_));
@@ -201,6 +213,7 @@ GrassProgram::Draw()
     SDL_DrawGPUIndexedPrimitives(
       scene_pass, index_count_, GRID_SZ * GRID_SZ, 0, 0, 0);
 
+    grid_.Draw(cmdbuf, scene_pass, camera_bind);
     skybox_.Draw(cmdbuf, scene_pass, camera_bind);
 
     SDL_EndGPURenderPass(scene_pass);
@@ -432,6 +445,7 @@ GrassProgram::DrawGui()
     ImGui::Text("Window Height: %d", window_h_);
     ImGui::Text("Rendertarget Width: %d", rendertarget_w_);
     ImGui::Text("Rendertarget Height: %d", rendertarget_h_);
+    ImGui::Text("Aspect Ratio: %f", (f32)rendertarget_w_ / (f32)rendertarget_h_);
     if (ImGui::TreeNode("Camera")) {
       ImGui::Text("Position");
       if (ImGui::SliderFloat3(

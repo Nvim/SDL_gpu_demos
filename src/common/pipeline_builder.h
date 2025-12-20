@@ -17,7 +17,7 @@ struct PipelineBuilder
 
   PipelineBuilder();
 
-  SDL_GPUGraphicsPipeline* Build(SDL_GPUDevice* device);
+  [[nodiscard]] SDL_GPUGraphicsPipeline* Build(SDL_GPUDevice* device);
   void Reset();
   PipelineBuilder& AddColorTarget(SDL_GPUTextureFormat format, bool blend);
   PipelineBuilder& AddVertexAttribute(SDL_GPUVertexElementFormat format);

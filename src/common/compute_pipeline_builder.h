@@ -8,7 +8,7 @@ class ComputePipelineBuilder
 public:
   ComputePipelineBuilder();
   ~ComputePipelineBuilder();
-  SDL_GPUComputePipeline* Build(SDL_GPUDevice* device);
+  [[nodiscard]] SDL_GPUComputePipeline* Build(SDL_GPUDevice* device);
 
   ComputePipelineBuilder& SetReadOnlyStorageTextureCount(i32 count);
   ComputePipelineBuilder& SetReadWriteStorageTextureCount(i32 count);
