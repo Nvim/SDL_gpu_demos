@@ -13,8 +13,8 @@ public:
   ~Grid();
 
   void Draw(SDL_GPUCommandBuffer* cmd_buf,
-             SDL_GPURenderPass* pass,
-             const CameraBinding& camera_uniform) const;
+            SDL_GPURenderPass* pass,
+            const CameraBinding& camera_uniform) const;
   bool IsLoaded() const { return loaded_; }
 
 public:

@@ -98,6 +98,12 @@ struct PosNormalTangentColorUvVertex
   glm::vec4 color{ 1.f };
 };
 
+struct Flag
+{
+  const char* label;
+  u32 flag_value;
+};
+
 struct CameraBinding
 {
   glm::mat4 viewproj;

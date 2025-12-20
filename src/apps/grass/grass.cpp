@@ -8,7 +8,6 @@
 #include "common/pipeline_builder.h"
 #include "common/types.h"
 #include "common/util.h"
-#include <SDL3/SDL_gpu.h>
 
 #include <glm/ext/matrix_transform.hpp>
 #include <imgui/backends/imgui_impl_sdl3.h>
@@ -103,41 +102,68 @@ GrassProgram::Init()
     return false;
   }
 
-  { // Generate grassblades instances:
+  if (!GenerateGrassblades()) {
+    LOG_CRITICAL("Couldn't create grassblades");
+    return false;
+  }
+
+  return true;
+}
+
+bool
+GrassProgram::GenerateGrassblades()
+{
+  LOG_TRACE("GrassProgram::GenerateGrassblades");
+  regenerate_grass_ = false;
+  static u32 prev_buffer_size = 0;
+
+  auto& p = grass_gen_params_;
+  auto blades_per_chunk = p.grass_per_chunk * p.grass_per_chunk;
+  auto total_chunks = p.chunk_count * p.chunk_count;
+  u32 sz = blades_per_chunk * total_chunks * GRASS_INSTANCE_SZ;
+
+  // Only recreate buffer if size changed
+  if (sz != prev_buffer_size) {
+    LOG_DEBUG("Creating new instance buffer");
     SDL_GPUBufferCreateInfo buf_info{};
     {
-      buf_info.size = GRID_SZ * GRID_SZ * 32; // 16*16 grid, 32 bytes struct
+      buf_info.size = sz;
       buf_info.usage = SDL_GPU_BUFFERUSAGE_COMPUTE_STORAGE_WRITE |
                        SDL_GPU_BUFFERUSAGE_GRAPHICS_STORAGE_READ;
     }
-    instance_buffer_ = SDL_CreateGPUBuffer(Device, &buf_info);
-    if (!instance_buffer_) {
-      LOG_CRITICAL("Couldn't create instance buffer: {}", GETERR);
+    auto ret = SDL_CreateGPUBuffer(Device, &buf_info);
+    if (!ret) {
+      LOG_ERROR("Couldn't create instance buffer: {}", GETERR);
       return false;
     }
-
-    SDL_GPUStorageBufferReadWriteBinding b;
-    {
-      b.buffer = instance_buffer_;
-      b.cycle = false;
-    }
-
-    SDL_GPUCommandBuffer* cmd_buf = SDL_AcquireGPUCommandBuffer(Device);
-    if (cmd_buf == NULL) {
-      LOG_CRITICAL("Couldn't acquire command buffer: {}", GETERR);
-      return false;
-    }
-    auto* pass = SDL_BeginGPUComputePass(cmd_buf, nullptr, 0, &b, 1);
-    SDL_BindGPUComputePipeline(pass, generate_grass_pipeline_);
-    SDL_BindGPUComputeStorageBuffers(pass, 0, &instance_buffer_, 1);
-    SDL_DispatchGPUCompute(pass, 1, 1, 1);
-    SDL_EndGPUComputePass(pass);
-    if (!SDL_SubmitGPUCommandBuffer(cmd_buf)) {
-      LOG_CRITICAL("Instance buffer generation failed: {}", GETERR);
-      return false;
-    }
+    instance_buffer_ = ret;
+    prev_buffer_size = sz;
+  } else {
+    LOG_DEBUG("Skipped instance buffer re-creation");
   }
 
+  SDL_GPUStorageBufferReadWriteBinding b;
+  {
+    b.buffer = instance_buffer_;
+    b.cycle = false;
+  }
+
+  SDL_GPUCommandBuffer* cmd_buf = SDL_AcquireGPUCommandBuffer(Device);
+  if (cmd_buf == NULL) {
+    LOG_ERROR("Couldn't acquire command buffer: {}", GETERR);
+    return false;
+  }
+  auto* pass = SDL_BeginGPUComputePass(cmd_buf, nullptr, 0, &b, 1);
+  SDL_BindGPUComputePipeline(pass, generate_grass_pipeline_);
+  SDL_BindGPUComputeStorageBuffers(pass, 0, &instance_buffer_, 1);
+  SDL_PushGPUComputeUniformData(
+    cmd_buf, 0, &grass_gen_params_, sizeof(GrassGenerationParams));
+  SDL_DispatchGPUCompute(pass, p.chunk_count, p.chunk_count, 1);
+  SDL_EndGPUComputePass(pass);
+  if (!SDL_SubmitGPUCommandBuffer(cmd_buf)) {
+    LOG_ERROR("Instance buffer generation failed: {}", GETERR);
+    return false;
+  }
   return true;
 }
 
@@ -156,6 +182,11 @@ GrassProgram::Poll()
     }
   }
   camera_.Update(DeltaTime);
+  if (regenerate_grass_) {
+    if (!GenerateGrassblades()) {
+      LOG_ERROR("Couldn't regenerate grassblades");
+    }
+  }
   return true;
 }
 
@@ -201,7 +232,6 @@ GrassProgram::Draw()
 
     SDL_SetGPUViewport(scene_pass, &scene_vp);
 
-
     SDL_BindGPUGraphicsPipeline(scene_pass, pipeline_);
     SDL_PushGPUVertexUniformData(cmdbuf, 0, &camera_bind, sizeof(camera_bind));
     SDL_PushGPUFragmentUniformData(cmdbuf, 0, &sunlight_, sizeof(sunlight_));
@@ -210,8 +240,11 @@ GrassProgram::Draw()
     SDL_BindGPUIndexBuffer(
       scene_pass, &idx_bind, SDL_GPU_INDEXELEMENTSIZE_32BIT);
 
+    auto& p = grass_gen_params_;
+    auto blades_per_chunk = p.grass_per_chunk * p.grass_per_chunk;
+    auto total_chunks = p.chunk_count * p.chunk_count;
     SDL_DrawGPUIndexedPrimitives(
-      scene_pass, index_count_, GRID_SZ * GRID_SZ, 0, 0, 0);
+      scene_pass, index_count_, total_chunks * blades_per_chunk, 0, 0, 0);
 
     grid_.Draw(cmdbuf, scene_pass, camera_bind);
     skybox_.Draw(cmdbuf, scene_pass, camera_bind);
@@ -339,7 +372,6 @@ GrassProgram::CreatePipeline()
     .SetVertexShader(vert)
     .SetFragmentShader(frag)
     .SetPrimitiveType(SDL_GPU_PRIMITIVETYPE_TRIANGLELIST)
-    // .AddVertexAttribute(SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3)
     .EnableDepthTest()
     .SetCompareOp(SDL_GPU_COMPAREOP_LESS)
     .EnableDepthWrite(DEPTH_FORMAT);
@@ -365,8 +397,8 @@ GrassProgram::CreateComputePipeline()
                                .SetReadOnlyStorageTextureCount(0)
                                .SetReadWriteStorageTextureCount(0)
                                .SetReadWriteStorageBufferCount(1)
-                               .SetUBOCount(0)
-                               .SetThreadCount(GRID_SZ, GRID_SZ, 1)
+                               .SetUBOCount(1)
+                               .SetThreadCount(32, 32, 1)
                                .SetShader(COMP_PATH)
                                .Build(Device);
 
@@ -429,6 +461,11 @@ GrassProgram::UploadVertexData()
   return true;
 }
 
+static constexpr Flag flags[] = {
+  { "Offset positions", GRASS_OFFSET_POS },
+  { "Random rotation", GRASS_ROTATE },
+};
+
 ImDrawData*
 GrassProgram::DrawGui()
 {
@@ -445,7 +482,8 @@ GrassProgram::DrawGui()
     ImGui::Text("Window Height: %d", window_h_);
     ImGui::Text("Rendertarget Width: %d", rendertarget_w_);
     ImGui::Text("Rendertarget Height: %d", rendertarget_h_);
-    ImGui::Text("Aspect Ratio: %f", (f32)rendertarget_w_ / (f32)rendertarget_h_);
+    ImGui::Text("Aspect Ratio: %f",
+                (f32)rendertarget_w_ / (f32)rendertarget_h_);
     if (ImGui::TreeNode("Camera")) {
       ImGui::Text("Position");
       if (ImGui::SliderFloat3(
@@ -468,10 +506,42 @@ GrassProgram::DrawGui()
       ImGui::ColorEdit3("Specular:", (f32*)&sunlight_.specular);
       ImGui::TreePop();
     }
+    if (ImGui::TreeNode("Grass Generation")) {
+      static auto tmp_params = grass_gen_params_; // copy to apply all at once
+      ImGui::ColorEdit3("Base Color:", (f32*)&tmp_params.base_color);
+      ImGui::SliderInt("Chunk count", (i32*)&tmp_params.chunk_count, 1, 15);
+      ImGui::SliderInt(
+        "Grassblades per chunk", (i32*)&tmp_params.grass_per_chunk, 1.f, 32.f);
+      ImGui::SliderFloat("Density", (f32*)&tmp_params.density, 1.f, 20.f);
+
+      for (const Flag& flag : flags) {
+        bool flag_set = (tmp_params.flags & flag.flag_value) != 0;
+        if (ImGui::Checkbox(flag.label, &flag_set)) {
+          if (flag_set) {
+            tmp_params.flags |= flag.flag_value;
+          } else {
+            tmp_params.flags &= ~flag.flag_value;
+          }
+        }
+      }
+      ImGui::SliderFloat(
+        "Max position offset", (f32*)&tmp_params.offset_cap, 0.f, 1.f);
+
+      if (ImGui::Button("Generate")) {
+        grass_gen_params_ = tmp_params;
+        regenerate_grass_ = true;
+      }
+
+      ImGui::SameLine();
+      if (ImGui::Button("Discard changes")) {
+        tmp_params = grass_gen_params_;
+      }
+
+      ImGui::TreePop();
+    }
     ImGui::End();
   }
-  if (ImGui::Begin("aaa")) {
-    ImGui::Text("Hello world");
+  if (ImGui::Begin("Scene")) {
     ImGui::Image((ImTextureID)(intptr_t)scene_target_,
                  ImVec2((float)rendertarget_w_, (float)rendertarget_h_));
     ImGui::End();

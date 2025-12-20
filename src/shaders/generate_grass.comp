@@ -2,31 +2,38 @@
 
 #extension GL_GOOGLE_include_directive : require
 #include "grass_instance.glsl"
+#include "grass_gen.h"
 
-layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+layout(local_size_x = 32, local_size_y = 32, local_size_z = 1) in;
 
-// layout(std140, set = 2, binding = 0) uniform uSettings {
-//     float time;
-//     float pad_[3];
-// };
+layout(std140, set = 2, binding = 0) uniform uSettings {
+    GrassGenerationParams params;
+};
 
 layout(set = 1, binding = 0) writeonly buffer InstanceBuffer {
     GrassInstance Instances[];
 };
 
-float rand(float x){
+float rand(float x) {
     return fract(sin(x) * 100000.f);
 }
 
+#define FLAG_ON(value) bool(params.flags & value)
+const float PI = 3.14159265358979323846;
+
 void main() {
-    const float density = 5.f;
-    uint idx = gl_GlobalInvocationID.x + (gl_GlobalInvocationID.y * 16);
-    float clamped_idx = clamp(float(idx) / 100.0, 0.0, 1.0);
-    // Instances[idx].color = vec3(clamped_idx * 0.2, clamped_idx, clamped_idx * 0.3);
-    Instances[idx].color = vec3(.36f, .909f, .21f);
-    Instances[idx].rotation = rand(idx);
-    Instances[idx].world_pos = vec3(
-            gl_GlobalInvocationID.x / density,
-            0.f,
-            gl_GlobalInvocationID.y / density);
+    uint idx = gl_GlobalInvocationID.x + (gl_GlobalInvocationID.y * params.grass_per_chunk*params.chunk_count);
+    Instances[idx].color = params.base_color.xyz;
+
+    Instances[idx].rotation = FLAG_ON(GRASS_ROTATE) ? rand(idx) * PI : 0.f;
+
+    float off_x = 0.f;
+    float off_z = 0.f;
+    if (FLAG_ON(GRASS_OFFSET_POS)) {
+        off_x = mod(rand(idx) * 2 - 1, params.offset_cap);
+        off_z = mod(rand(off_x) * 2 - 1, params.offset_cap);
+    }
+
+    Instances[idx].world_pos = vec3((gl_GlobalInvocationID.x / params.density) + off_x,
+            0.f, (gl_GlobalInvocationID.y / params.density) + off_z);
 }

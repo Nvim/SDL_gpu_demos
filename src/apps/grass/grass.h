@@ -4,6 +4,7 @@
 #include "common/program.h"
 #include "common/skybox.h"
 #include "common/types.h"
+#include "shaders/grass_gen.h"
 
 #include <SDL3/SDL_gpu.h>
 #include <imgui/imgui.h>
@@ -30,7 +31,7 @@ class GrassProgram : public Program
   static constexpr SDL_GPUTextureFormat DEPTH_FORMAT =
     SDL_GPU_TEXTUREFORMAT_D16_UNORM;
 
-  static constexpr u32 GRID_SZ = 16;
+  static constexpr u64 GRASS_INSTANCE_SZ = 32;
 
 public:
   GrassProgram(SDL_GPUDevice* device,
@@ -50,6 +51,7 @@ private:
   bool CreatePipeline();
   bool CreateComputePipeline();
   bool UploadVertexData();
+  bool GenerateGrassblades();
   ImDrawData* DrawGui();
 
 private:
@@ -58,12 +60,18 @@ private:
   i32 window_h_;
   i32 rendertarget_w_;
   i32 rendertarget_h_;
-  u32 grid_size_{ 32 };
   u32 index_count_{ 0 };
   Camera camera_{};
   Skybox skybox_{ SKYBOX_PATH, EnginePtr, TARGET_FORMAT };
-  Grid grid_{EnginePtr, TARGET_FORMAT};
+  Grid grid_{ EnginePtr, TARGET_FORMAT };
   DirLightBinding sunlight_;
+  GrassGenerationParams grass_gen_params_{ glm::vec3{ .19f, .44f, .12f },
+                                           GRASS_ROTATE | GRASS_OFFSET_POS,
+                                           4,
+                                           32,
+                                           .2f,
+                                           12.f };
+  bool regenerate_grass_{ false };
 
   // GPU Resources:
   SDL_GPUTexture* depth_target_{ nullptr };
