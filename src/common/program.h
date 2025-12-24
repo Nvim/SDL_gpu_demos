@@ -15,7 +15,7 @@ public:
   SDL_Window* Window;
   Engine* EnginePtr;
   f32 DeltaTime{ 0.0f };
-  f32 lastTime{ 0.0f };
+  f32 lastTime = SDL_GetTicks();
   // static inline std::shared_ptr<spdlog::logger> s_app_logger{};
 
 public:

@@ -16,7 +16,7 @@ layout(location = 1) out vec3 OutViewPos;
 layout(location = 2) out vec3 OutFragPos;
 layout(location = 3) out vec3 OutNormal;
 
-layout(std430, set = 0, binding = 0) buffer VertexBuffer {
+layout(std430, set = 0, binding = 0) readonly buffer VertexBuffer {
     Vertex Vertices[];
 };
 

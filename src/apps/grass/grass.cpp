@@ -158,6 +158,7 @@ GrassProgram::GenerateGrassblades()
   SDL_BindGPUComputeStorageBuffers(pass, 0, &instance_buffer_, 1);
   SDL_PushGPUComputeUniformData(
     cmd_buf, 0, &grass_gen_params_, sizeof(GrassGenerationParams));
+  SDL_PushGPUComputeUniformData(cmd_buf, 1, &lastTime, sizeof(lastTime));
   SDL_DispatchGPUCompute(pass, p.chunk_count, p.chunk_count, 1);
   SDL_EndGPUComputePass(pass);
   if (!SDL_SubmitGPUCommandBuffer(cmd_buf)) {
@@ -397,7 +398,7 @@ GrassProgram::CreateComputePipeline()
                                .SetReadOnlyStorageTextureCount(0)
                                .SetReadWriteStorageTextureCount(0)
                                .SetReadWriteStorageBufferCount(1)
-                               .SetUBOCount(1)
+                               .SetUBOCount(2)
                                .SetThreadCount(32, 32, 1)
                                .SetShader(COMP_PATH)
                                .Build(Device);

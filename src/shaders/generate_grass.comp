@@ -10,6 +10,10 @@ layout(std140, set = 2, binding = 0) uniform uSettings {
     GrassGenerationParams params;
 };
 
+layout(std140, set = 2, binding = 1) uniform uTime {
+    float time;
+};
+
 layout(set = 1, binding = 0) writeonly buffer InstanceBuffer {
     GrassInstance Instances[];
 };
@@ -25,13 +29,13 @@ void main() {
     uint idx = gl_GlobalInvocationID.x + (gl_GlobalInvocationID.y * params.grass_per_chunk*params.chunk_count);
     Instances[idx].color = params.base_color.xyz;
 
-    Instances[idx].rotation = FLAG_ON(GRASS_ROTATE) ? rand(idx) * PI : 0.f;
+    Instances[idx].rotation = FLAG_ON(GRASS_ROTATE) ? rand(idx*sin(time)) * PI : 0.f;
 
     float off_x = 0.f;
     float off_z = 0.f;
     if (FLAG_ON(GRASS_OFFSET_POS)) {
-        off_x = mod(rand(idx) * 2 - 1, params.offset_cap);
-        off_z = mod(rand(off_x) * 2 - 1, params.offset_cap);
+        off_x = mod(rand(sin(time)) * 2 - 1, params.offset_cap);
+        off_z = mod(rand(cos(time)) * 2 - 1, params.offset_cap);
     }
 
     Instances[idx].world_pos = vec3((gl_GlobalInvocationID.x / params.density) + off_x,
