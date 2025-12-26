@@ -1,3 +1,6 @@
+#ifndef GRASS_INSTANCE_GLSL
+#define GRASS_INSTANCE_GLSL
+
 struct GrassInstance {
     vec3 color;
     float pad_0;
@@ -7,3 +10,5 @@ struct GrassInstance {
     // vec2 translationXZ; // XZ translation only
     // f32 rotation;
 };
+
+#endif
