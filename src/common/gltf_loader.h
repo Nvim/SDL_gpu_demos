@@ -35,9 +35,9 @@ public:
 
 public:
   static constexpr const char* VertexShaderPath =
-    "resources/shaders/compiled/vert.spv";
+    "resources/shaders/compiled/pbr.vert.spv";
   static constexpr const char* FragmentShaderPath =
-    "resources/shaders/compiled/frag.spv";
+    "resources/shaders/compiled/pbr.frag.spv";
 
 private:
   bool LoadVertexData(GLTFScene* ret);

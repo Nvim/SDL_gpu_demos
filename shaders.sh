@@ -6,20 +6,40 @@ OUT=resources/shaders/compiled
 
 mkdir -p "$OUT"
 
-glslang $SRC/frag.frag -V -o $OUT/frag.spv -I$SRC;
-glslang $SRC/vert.vert -V -o $OUT/vert.spv -I$SRC;
-glslang $SRC/skybox.frag -V -o $OUT/skybox.frag.spv;
-glslang $SRC/skybox.vert -V -o $OUT/skybox.vert.spv -I$SRC;
-glslang $SRC/cubemap_projection.frag -V -o $OUT/cubemap_projection.frag.spv;
-glslang $SRC/cubemap_projection.vert -V -o $OUT/cubemap_projection.vert.spv;
-glslang $SRC/grass.vert -V -o $OUT/grass.vert.spv;
-glslang $SRC/grass.frag -V -o $OUT/grass.frag.spv;
-glslang $SRC/grid.vert -V -o $OUT/grid.vert.spv;
-glslang $SRC/grid.frag -V -o $OUT/grid.frag.spv;
-glslang $SRC/generate_grass.comp -V -o $OUT/generate_grass.comp.spv;
+SHADER_LIST=( $(find $SRC -type f \( -name "*.comp" -o -name "*.frag" -o -name "*.vert" \) -exec basename {} \;) )
 
-glslang $SRC/post_process.comp -V -o $OUT/post_process.comp.spv;
+if [[ $# -eq 1 && -n $1 ]]; then 
+  if [[ $1 = "pbr" ]]; then 
+    SHADER_LIST=(
+      "pbr.vert"
+      "pbr.frag"
+      "post_process.comp"
+      ) 
+  fi
 
-## 
-glslang $SRC/color.frag -V -o $OUT/color.frag.spv;
-glslang $SRC/ssbo.vert -V -o $OUT/ssbo.vert.spv;
+  if [[  $1 = "grass" ]]; then 
+    SHADER_LIST=(
+      "grid.vert"
+      "grass.vert"
+      "terrain.vert"
+      "grid.frag"
+      "grass.frag"
+      "generate_grass.comp"
+      ) 
+  fi
+
+  if [[ $1 = "base" ]]; then 
+    SHADER_LIST=(
+      "skybox.vert"
+      "cubemap_projection.vert"
+      "skybox.frag"
+      "cubemap_projection.frag"
+      "color.frag"
+      ) 
+  fi
+fi
+
+
+for shader in "${SHADER_LIST[@]}"; do
+  glslang "$SRC/$shader" -V -o "$OUT/$shader.spv" "-I$SRC";
+done

@@ -55,13 +55,15 @@ template<typename T>
 bool
 Engine::UploadToBuffer(SDL_GPUBuffer* buf, const T* data, const u32 count)
 {
-  LOG_TRACE("GLTFLoader::UploadBuffers");
+  LOG_TRACE("Engine::UploadBuffers");
   if (buf == nullptr) {
     LOG_ERROR("Couldn't upload to buffer: invalid buffer");
     return false;
   }
 
-  TransferBufferWrapper tr_wrapped{ Device, count };
+  const u32 transfer_size = sizeof(T)*count;
+
+  TransferBufferWrapper tr_wrapped{ Device, transfer_size };
   auto* tr_buf = tr_wrapped.Get();
   if (!tr_buf) {
     LOG_ERROR("Couldn't create transfer buffer: {}", SDL_GetError);
@@ -99,7 +101,7 @@ Engine::UploadToBuffer(SDL_GPUBuffer* buf, const T* data, const u32 count)
     {
       reg.buffer = buf;
       reg.offset = 0;
-      reg.size = static_cast<u32>(sizeof(T) * count);
+      reg.size = transfer_size;
     };
     SDL_UploadToGPUBuffer(copyPass, &trLoc, &reg, false);
 
