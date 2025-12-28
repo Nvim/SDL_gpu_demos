@@ -32,22 +32,15 @@ const float PI = 3.14159265358979323846;
 
 void main() {
 
-    // Each workgroup processes a single terrain chunk
+    // Each workgroup processes a single terrain chunk for now
     if (gl_LocalInvocationIndex == 0) {
-        // uint total_chunks = params.chunk_count * params.chunk_count;
-        float chunk_x = (params.chunk_count / 2) - (gl_WorkGroupID.x * 8.f);
-        float chunk_y = (params.chunk_count / 2) - (gl_WorkGroupID.y * 8.f);
-        uint chunk_idx = gl_WorkGroupID.x + (gl_WorkGroupID.y * params.chunk_count);
-        Chunks[chunk_idx].world_translation = vec2(chunk_x, chunk_y);
-        Chunks[chunk_idx].y_corners[0] = rand(chunk_x * sin(time));
-        Chunks[chunk_idx].y_corners[1] = rand(chunk_y * cos(time));
-        Chunks[chunk_idx].y_corners[2] = rand(tan(time));
-        Chunks[chunk_idx].y_corners[3] = rand(chunk_x*chunk_y*cos(time));
-        Chunks[chunk_idx].pad_[0] = clamp(rand(chunk_x*chunk_y*cos(time)), .2f, .9f);
-        Chunks[chunk_idx].pad_[1] = clamp(rand(chunk_y*sin(time)), .2f, .9f);
+        int chunk_x = int(gl_WorkGroupID.x) - int(params.terrain_width / 2);
+        int chunk_y = int(gl_WorkGroupID.y) - int(params.terrain_width / 2);
+        uint chunk_idx = gl_WorkGroupID.x + (gl_WorkGroupID.y * params.terrain_width);
+        Chunks[chunk_idx].world_translation = ivec2(chunk_x, chunk_y);
     }
 
-    uint idx = gl_GlobalInvocationID.x + (gl_GlobalInvocationID.y * params.grass_per_chunk * params.chunk_count);
+    uint idx = gl_GlobalInvocationID.x + (gl_GlobalInvocationID.y * params.grass_per_chunk * params.terrain_width);
     Grassblades[idx].color = params.base_color.xyz;
     Grassblades[idx].rotation = FLAG_ON(GRASS_ROTATE) ? rand(idx * sin(time)) * PI : 0.f;
 

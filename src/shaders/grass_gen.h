@@ -12,7 +12,7 @@ using uint = std::uint32_t;
 struct GrassGenerationParams {
     vec3 base_color;
     uint flags;
-    uint chunk_count; // dispatch count of 1 dimension
+    uint terrain_width; // dispatch count of 1 dimension
     uint grass_per_chunk; // local_size of 1 dimension
     float offset_cap; // world pos per-blade offset cap
 

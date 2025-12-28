@@ -30,7 +30,8 @@ GrassProgram::GrassProgram(SDL_GPUDevice* device,
   rendertarget_h_ = window_h_ * (3 / 4.f);
   rendertarget_w_ = window_w_ * (3 / 4.f);
   camera_.SetAspect((f32)rendertarget_w_ / (f32)rendertarget_h_);
-  camera_.Position = { 2.5, 1.25, 4.5 };
+  camera_.SetNearFar(.1f, 1000.f);
+  camera_.Position = { 2.5f, 20.f, 4.5f };
   camera_.Pitch = -13.f;
   camera_.Yaw = -25.f;
   {
@@ -115,7 +116,7 @@ GrassProgram::Init()
   { // noise
     SDL_GPUTextureCreateInfo info{};
     {
-      info.format = SDL_GPU_TEXTUREFORMAT_R8_UNORM;
+      info.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
       info.height = 128;
       info.width = 128;
       info.num_levels = 1;
@@ -128,9 +129,12 @@ GrassProgram::Init()
       return false;
     }
     LoadedImage noise_img{};
-    if (!ImageLoader::Load(noise_img,
-                           "resources/textures/noise/128x128/Manifold/Manifold "
-                           "13 - 128x128.png")) {
+    if (!ImageLoader::Load(
+          noise_img,
+          // "resources/textures/noise/128x128/Spokes/Spokes 10 - 128x128.png"
+          "resources/textures/noise/128x128/Manifold/Manifold 13 - 128x128.png"
+          //
+          )) {
       LOG_CRITICAL("Couldn't load noise image");
       return false;
     }
@@ -159,7 +163,7 @@ GrassProgram::GenerateGrassblades()
 
   auto& p = grass_gen_params_;
   auto blades_per_chunk = p.grass_per_chunk * p.grass_per_chunk;
-  auto total_chunks = p.chunk_count * p.chunk_count;
+  auto total_chunks = p.terrain_width * p.terrain_width;
   u32 sz = blades_per_chunk * total_chunks * GRASS_INSTANCE_SZ;
 
   // Only recreate buffer if size changed
@@ -185,7 +189,7 @@ GrassProgram::GenerateGrassblades()
   {
     SDL_GPUBufferCreateInfo buf_info{};
     {
-      buf_info.size = total_chunks * 32;
+      buf_info.size = total_chunks * 16;
       buf_info.usage = SDL_GPU_BUFFERUSAGE_COMPUTE_STORAGE_WRITE |
                        SDL_GPU_BUFFERUSAGE_GRAPHICS_STORAGE_READ;
     }
@@ -213,7 +217,7 @@ GrassProgram::GenerateGrassblades()
   SDL_PushGPUComputeUniformData(
     cmd_buf, 0, &grass_gen_params_, sizeof(GrassGenerationParams));
   SDL_PushGPUComputeUniformData(cmd_buf, 1, &lastTime, sizeof(lastTime));
-  SDL_DispatchGPUCompute(pass, p.chunk_count, p.chunk_count, 1);
+  SDL_DispatchGPUCompute(pass, p.terrain_width, p.terrain_width, 1);
   SDL_EndGPUComputePass(pass);
   if (!SDL_SubmitGPUCommandBuffer(cmd_buf)) {
     LOG_ERROR("Instance buffer generation failed: {}", GETERR);
@@ -286,8 +290,6 @@ GrassProgram::Draw()
 
     SDL_SetGPUViewport(scene_pass, &scene_vp);
 
-    // static const SDL_GPUTextureSamplerBinding b{ noise_texture_,
-    //                                              noise_sampler_ };
     // { // grass
     //   static SDL_GPUBuffer* bufs[2]{ grassblade_vertices_,
     //                                  grassblade_instances_ };
@@ -305,22 +307,27 @@ GrassProgram::Draw()
     //
     //   auto& p = grass_gen_params_;
     //   auto blades_per_chunk = p.grass_per_chunk * p.grass_per_chunk;
-    //   auto total_chunks = p.chunk_count * p.chunk_count;
+    //   auto total_chunks = p.terrain_width * p.terrain_width;
     //   SDL_DrawGPUIndexedPrimitives(
     //     scene_pass, index_count_, total_chunks * blades_per_chunk, 0, 0, 0);
     // }
     { // terrain
+      static const SDL_GPUTextureSamplerBinding b{ noise_texture_,
+                                                   noise_sampler_ };
       SDL_BindGPUGraphicsPipeline(scene_pass, terrain_pipeline_);
 
+      SDL_BindGPUVertexSamplers(scene_pass, 0, &b, 1);
       SDL_BindGPUVertexStorageBuffers(scene_pass, 0, &chunk_instances_, 1);
       SDL_PushGPUVertexUniformData(
         cmdbuf, 0, &camera_bind, sizeof(camera_bind));
+      SDL_PushGPUVertexUniformData(
+        cmdbuf, 1, &terrain_params_, sizeof(terrain_params_));
 
       SDL_BindGPUIndexBuffer(
         scene_pass, &chunk_idx_bind, SDL_GPU_INDEXELEMENTSIZE_32BIT);
 
       auto& p = grass_gen_params_;
-      auto total_chunks = p.chunk_count * p.chunk_count;
+      auto total_chunks = p.terrain_width * p.terrain_width;
       SDL_DrawGPUIndexedPrimitives(scene_pass, 6, total_chunks, 0, 0, 0);
     }
 
@@ -469,7 +476,7 @@ GrassProgram::CreateGraphicsPipelines()
   }
 
   { // Terrain
-    auto vert = LoadShader(TERRAIN_VS_PATH, Device, 0, 1, 1, 0);
+    auto vert = LoadShader(TERRAIN_VS_PATH, Device, 1, 2, 1, 0);
     if (vert == nullptr) {
       LOG_ERROR("Couldn't load vertex shader at path {}", TERRAIN_VS_PATH);
       return false;
@@ -609,7 +616,7 @@ GrassProgram::DrawGui()
     if (ImGui::TreeNode("Camera")) {
       ImGui::Text("Position");
       if (ImGui::SliderFloat3(
-            "Translation", (f32*)&camera_.Position, -50.f, 50.f)) {
+            "Translation", (f32*)&camera_.Position, -150.f, 150.f)) {
         camera_.Moved = true;
       }
       ImGui::Text("Rotation");
@@ -628,10 +635,16 @@ GrassProgram::DrawGui()
       ImGui::ColorEdit3("Specular:", (f32*)&sunlight_.specular);
       ImGui::TreePop();
     }
+    if (ImGui::TreeNode("Terrain")) {
+      ImGui::SliderInt("World scale", &terrain_params_.world_scale, 1, 32);
+      ImGui::SliderFloat(
+        "Heightmap scale", &terrain_params_.heightmap_scale, 1.f, 128.f);
+      ImGui::TreePop();
+    }
     if (ImGui::TreeNode("Grass Generation")) {
       static auto tmp_params = grass_gen_params_; // copy to apply all at once
       ImGui::ColorEdit3("Base Color:", (f32*)&tmp_params.base_color);
-      ImGui::SliderInt("Chunk count", (i32*)&tmp_params.chunk_count, 1, 15);
+      ImGui::SliderInt("Chunk count", (i32*)&tmp_params.terrain_width, 4, 256);
       ImGui::SliderInt(
         "Grassblades per chunk", (i32*)&tmp_params.grass_per_chunk, 1.f, 32.f);
       ImGui::SliderFloat("Density", (f32*)&tmp_params.density, 1.f, 20.f);
@@ -651,6 +664,7 @@ GrassProgram::DrawGui()
 
       if (ImGui::Button("Generate")) {
         grass_gen_params_ = tmp_params;
+        terrain_params_.terrain_width = grass_gen_params_.terrain_width;
         regenerate_grass_ = true;
       }
 

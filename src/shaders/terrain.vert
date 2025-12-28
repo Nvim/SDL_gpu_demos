@@ -11,12 +11,20 @@ struct Vertex {
 
 layout(location = 0) out vec3 OutFragColor;
 
-layout(std430, set = 0, binding = 0) readonly buffer InstanceBuffer {
+layout(set = 0, binding = 0) uniform sampler2D TexNoise;
+
+layout(std430, set = 0, binding = 1) readonly buffer InstanceBuffer {
     ChunkInstance Instances[];
 };
 
 layout(std140, set = 1, binding = 0) uniform uCamera {
     CameraBinding camera;
+};
+
+layout(std140, set = 1, binding = 1) uniform uTerrain {
+    int terrain_width;
+    int world_scale;
+    float heightmap_scale; // different scale for Y
 };
 
 mat4 modelFromWorldPos(in vec3 worldPos) {
@@ -34,10 +42,10 @@ mat4 scaleWorldPos(in vec3 worldPos, in float scale) {
     return m;
 }
 
-const Vertex bot_left = Vertex(vec3(-1.0, 0.0, -1.0), 0.0);
-const Vertex bot_right = Vertex(vec3(1.0, 0.0, -1.0), 0.0);
-const Vertex top_left = Vertex(vec3(-1.0, 0.0, 1.0), 0.0);
-const Vertex top_right = Vertex(vec3(1.0, 0.0, 1.0), 0.0);
+const Vertex bot_left = Vertex(vec3(-.5f, 0.f, -.5f), 0.f);
+const Vertex bot_right = Vertex(vec3(.5f, 0.f, -.5f), 0.f);
+const Vertex top_left = Vertex(vec3(-.5f, 0.f, .5f), 0.f);
+const Vertex top_right = Vertex(vec3(.5f, 0.f, .5f), 0.f);
 
 const Vertex Quad[4] = Vertex[4](
         bot_left, bot_right, top_left, top_right
@@ -48,14 +56,28 @@ void main()
     Vertex vert = Quad[gl_VertexIndex];
     ChunkInstance instance = Instances[gl_InstanceIndex];
 
-    vec3 translation = vec3(instance.world_translation.x,
-            instance.y_corners[gl_VertexIndex],
-            instance.world_translation.y);
-    mat4 mat_translate = modelFromWorldPos(translation);
-    mat4 mat_scale = scaleWorldPos(translation, 4.f);
-    mat4 mat_m = mat_translate * mat_scale;
-    vec4 world_pos = mat_m * vec4(vert.position, 1.0);
+    // [0, WIDTH-1]
+    // int w = gl_InstanceIndex % terrain_width;
+    // int h = gl_InstanceIndex / terrain_width;
+    float w = instance.world_translation.x;
+    float h = instance.world_translation.y;
 
-    OutFragColor = vec3(instance.pad_[0], .55f, instance.pad_[1]);
+    vec3 translation = vec3(w * world_scale, 0.f, h * world_scale);
+
+    mat4 mat_translate = modelFromWorldPos(translation);
+    mat4 mat_scale = scaleWorldPos(translation, world_scale);
+    mat4 mat_model = mat_translate * mat_scale;
+    vec4 world_pos = mat_model * vec4(vert.position, 1.0);
+
+    vec2 uv = vec2(
+            ((world_pos.x / world_scale) / terrain_width) + .5f,
+            ((world_pos.z / world_scale) / terrain_width) + .5f
+        );
+
+    float height = texture(TexNoise, uv).r;
+    world_pos.y = (height - .5f) * heightmap_scale;
+
+    vec3 base_color = vec3(.19f, .44f, .12f);
+    OutFragColor = base_color * (height * .75f + .25f);
     gl_Position = camera.viewproj * world_pos;
 }

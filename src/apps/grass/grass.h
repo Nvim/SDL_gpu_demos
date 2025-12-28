@@ -14,6 +14,13 @@ class Engine;
 
 namespace grass {
 
+struct TerrainBinding
+{
+  i32 terrain_width;
+  i32 world_scale;
+  f32 heightmap_scale;
+};
+
 class GrassProgram : public Program
 {
   using path = std::filesystem::path;
@@ -69,9 +76,14 @@ private:
   Skybox skybox_{ SKYBOX_PATH, EnginePtr, TARGET_FORMAT };
   Grid grid_{ EnginePtr, TARGET_FORMAT };
   DirLightBinding sunlight_;
+  TerrainBinding terrain_params_{
+    .terrain_width = 64,
+    .world_scale = 16,
+    .heightmap_scale = 32.f,
+  };
   GrassGenerationParams grass_gen_params_{ glm::vec3{ .19f, .44f, .12f },
                                            GRASS_ROTATE | GRASS_OFFSET_POS,
-                                           4,
+                                           64,
                                            32,
                                            .2f,
                                            12.f };
