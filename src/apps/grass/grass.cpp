@@ -299,6 +299,7 @@ GrassProgram::Draw()
       SDL_BindGPUVertexSamplers(scene_pass, 0, &b, 1);
       SDL_BindGPUVertexStorageBuffers(scene_pass, 0, &grassblade_vertices_, 1);
       SDL_BindGPUVertexStorageBuffers(scene_pass, 1, &grassblade_instances_, 1);
+      SDL_BindGPUVertexStorageBuffers(scene_pass, 2, &chunk_instances_, 1);
       SDL_PushGPUVertexUniformData(
         cmdbuf, 0, &camera_bind, sizeof(camera_bind));
       SDL_PushGPUVertexUniformData(
@@ -457,7 +458,7 @@ GrassProgram::CreateGraphicsPipelines()
     .EnableDepthWrite(DEPTH_FORMAT);
 
   { // Grass
-    auto vert = LoadShader(GRASS_VS_PATH, Device, 1, 2, 2, 0);
+    auto vert = LoadShader(GRASS_VS_PATH, Device, 1, 2, 3, 0);
     if (vert == nullptr) {
       LOG_ERROR("Couldn't load vertex shader at path {}", GRASS_VS_PATH);
       return false;

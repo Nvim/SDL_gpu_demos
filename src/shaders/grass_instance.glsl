@@ -2,8 +2,9 @@
 #define GRASS_INSTANCE_GLSL
 
 struct GrassInstance {
-    vec3 world_pos;
+    uint chunk_index; // Chunk the grassblade is standing on
     float rotation; // Y axis rotation
+    vec2 relative_translation; // Position relative to chunk's center
 };
 
 #endif

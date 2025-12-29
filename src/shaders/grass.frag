@@ -29,21 +29,19 @@ void main()
     float y = inFragPos.y / den; // [0,1] -> [0,0.5]
     float color_fact = y - halfden; // [0,0.5] -> [-0.25,0.25]
 
-    // vec3 color = inColor + color_fact;
-    vec3 color = inColor;
+    // OutFragColor = vec4(inColor + color_fact, 1.0);
+    OutFragColor = vec4(inColor, 1.0);
 
-    vec3 ambient = sun.ambient * color;
-
-    vec3 light_dir = normalize(sun.direction);
-    float diffuse_factor = max(dot(normal, light_dir), 0.f);
-    vec3 diffuse = sun.diffuse * diffuse_factor * color;
-
-    vec3 view_dir = normalize(inViewPos - inFragPos);
-    vec3 specular_dir = reflect(-light_dir, normal);
-    float specular_factor = pow(max(dot(view_dir, specular_dir), 0.f), 32);
-    vec3 specular = sun.specular * specular_factor * color;
-
-    vec3 result = ambient + diffuse + specular;
-
-    OutFragColor = vec4(inColor + color_fact, 1.0);
+    // vec3 ambient = sun.ambient * color;
+    //
+    // vec3 light_dir = normalize(sun.direction);
+    // float diffuse_factor = max(dot(normal, light_dir), 0.f);
+    // vec3 diffuse = sun.diffuse * diffuse_factor * color;
+    //
+    // vec3 view_dir = normalize(inViewPos - inFragPos);
+    // vec3 specular_dir = reflect(-light_dir, normal);
+    // float specular_factor = pow(max(dot(view_dir, specular_dir), 0.f), 32);
+    // vec3 specular = sun.specular * specular_factor * color;
+    //
+    // vec3 result = ambient + diffuse + specular;
 }

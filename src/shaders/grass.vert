@@ -2,6 +2,7 @@
 
 #extension GL_GOOGLE_include_directive : require
 #include "grass_instance.glsl"
+#include "terrain_chunk_instance.glsl"
 #include "camera_binding.glsl"
 
 struct Vertex {
@@ -22,8 +23,12 @@ layout(std430, set = 0, binding = 1) readonly buffer VertexBuffer {
     Vertex Vertices[];
 };
 
-layout(std430, set = 0, binding = 2) readonly buffer InstanceBuffer {
-    GrassInstance Instances[];
+layout(std430, set = 0, binding = 2) readonly buffer GrassInstanceBuffer {
+    GrassInstance GrassInstances[];
+};
+
+layout(std430, set = 0, binding = 3) readonly buffer ChunkInstanceBuffer {
+    ChunkInstance ChunkInstances[];
 };
 
 layout(std140, set = 1, binding = 0) uniform uCamera {
@@ -73,33 +78,25 @@ const vec3 base_color = vec3(.19f, .44f, .12f);
 void main()
 {
     Vertex vert = Vertices[gl_VertexIndex];
-    GrassInstance instance = Instances[gl_InstanceIndex];
+    GrassInstance grass_instance = GrassInstances[gl_InstanceIndex];
+    ChunkInstance chunk = ChunkInstances[grass_instance.chunk_index];
 
     float world_scale = float(world_size) / float(terrain_width);
-    vec3 translation = vec3(instance.world_pos.x * world_scale,
+    vec3 translation = vec3(chunk.world_translation.x * world_scale,
             1.f,
-            instance.world_pos.z * world_scale);
+            chunk.world_translation.y * world_scale);
 
     vec2 uv = vec2(
-            (instance.world_pos.x / terrain_width) + .5f,
-            (instance.world_pos.z / terrain_width) + .5f
+            ((chunk.world_translation.x) / float(terrain_width)) + .5f,
+            ((chunk.world_translation.y) / float(terrain_width)) + .5f
         );
     float height = texture(TexNoise, uv).r;
 
     translation.y = (height - .5f) * heightmap_scale;
     mat4 mat_translate = modelFromWorldPos(translation);
-    // mat4 mat_scale = scaleWorldPos(translation, world_scale);
     mat4 mat_model = mat_translate;
-    mat_model *= rotateY(instance.rotation);
+    mat_model *= rotateY(grass_instance.rotation);
     vec4 world_pos = mat_model * vec4(vert.position, 1.0);
-
-    // vec2 uv = vec2(
-    //         ((world_pos.x / world_scale) / terrain_width) + .5f,
-    //         ((world_pos.z / world_scale) / terrain_width) + .5f
-    //     );
-    // float height = texture(TexNoise, uv).r;
-    // world_pos.y = (height - .5f) * heightmap_scale;
-    // world_pos = modelFromWorldPos(vec3(0.f, (height - .5f) * heightmap_scale, 0.f)) * world_pos;
 
     OutFragColor = base_color;
     OutFragPos = world_pos.xyz;

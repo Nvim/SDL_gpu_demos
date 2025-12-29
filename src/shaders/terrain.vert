@@ -59,13 +59,9 @@ void main()
     Vertex vert = Quad[gl_VertexIndex];
     ChunkInstance instance = Instances[gl_InstanceIndex];
 
-    // [0, WIDTH-1]
-    // int w = gl_InstanceIndex % terrain_width;
-    // int h = gl_InstanceIndex / terrain_width;
     float w = instance.world_translation.x;
     float h = instance.world_translation.y;
 
-    // float world_scale = world_size / terrain_width;
     float world_scale = float(world_size) / float(terrain_width);
 
     vec3 translation = vec3(w * world_scale, 0.f, h * world_scale);
@@ -85,7 +81,8 @@ void main()
 
     gl_Position = camera.viewproj * world_pos;
     if (highlight_chunks != 0) {
-        OutFragColor = vec3(vert.position.x+.5f, .2f, vert.position.z+.5f);
+        // OutFragColor = vec3(vert.position.x+.5f, .2f, vert.position.z+.5f);
+        OutFragColor = vec3(uv.x, .2f, uv.y);
         return;
     }
     OutFragColor = base_color * (height * .75f + .25f);
