@@ -5,6 +5,7 @@ layout(location = 0) in vec3 inColor;
 layout(location = 1) in vec3 inViewPos;
 layout(location = 2) in vec3 inFragPos;
 layout(location = 3) in vec3 inNormal;
+layout(location = 4) in float inLocalHeight;
 
 struct DirLight {
     vec3 direction;
@@ -26,11 +27,10 @@ void main()
 
     float den = 1.5f;
     float halfden = (1.f / 1.5f) / 2.f;
-    float y = inFragPos.y / den; // [0,1] -> [0,0.5]
+    float y = inLocalHeight / den; // [0,1] -> [0,0.5]
     float color_fact = y - halfden; // [0,0.5] -> [-0.25,0.25]
 
-    // OutFragColor = vec4(inColor + color_fact, 1.0);
-    OutFragColor = vec4(inColor, 1.0);
+    OutFragColor = vec4(inColor + color_fact, 1.0);
 
     // vec3 ambient = sun.ambient * color;
     //

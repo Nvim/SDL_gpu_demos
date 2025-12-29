@@ -69,7 +69,7 @@ private:
 
 private:
   bool quit_{ false };
-  bool draw_terrain_{true};
+  bool draw_terrain_{ true };
   i32 window_w_;
   i32 window_h_;
   i32 rendertarget_w_;
@@ -83,14 +83,14 @@ private:
     .terrain_width = 16,
     .world_size = 32,
     .heightmap_scale = 4.f,
-    .highlight_chunks = 1,
+    .highlight_chunks = 0,
   };
   GrassGenerationParams grass_gen_params_{ .base_color =
                                              glm::vec3{ .19f, .44f, .12f },
                                            .flags =
                                              GRASS_ROTATE | GRASS_OFFSET_POS,
                                            .terrain_width = 16,
-                                           .grass_per_chunk = 1,
+                                           .grass_per_chunk = 16,
                                            .offset_cap = .2f,
                                            .density = 12.f };
   bool regenerate_grass_{ false };

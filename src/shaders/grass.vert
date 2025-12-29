@@ -16,6 +16,7 @@ layout(location = 0) out vec3 OutFragColor;
 layout(location = 1) out vec3 OutViewPos;
 layout(location = 2) out vec3 OutFragPos;
 layout(location = 3) out vec3 OutNormal;
+layout(location = 4) out float OutLocalHeight;
 
 layout(set = 0, binding = 0) uniform sampler2D TexNoise;
 
@@ -82,13 +83,13 @@ void main()
     ChunkInstance chunk = ChunkInstances[grass_instance.chunk_index];
 
     float world_scale = float(world_size) / float(terrain_width);
-    vec3 translation = vec3(chunk.world_translation.x * world_scale,
-            1.f,
-            chunk.world_translation.y * world_scale);
+    vec2 t = chunk.world_translation;
+    t += grass_instance.relative_translation;
+    vec3 translation = vec3(t.x * world_scale, 1.f, t.y * world_scale);
 
     vec2 uv = vec2(
-            ((chunk.world_translation.x) / float(terrain_width)) + .5f,
-            ((chunk.world_translation.y) / float(terrain_width)) + .5f
+            ((t.x) / float(terrain_width)) + .5f,
+            ((t.y) / float(terrain_width)) + .5f
         );
     float height = texture(TexNoise, uv).r;
 
@@ -102,5 +103,6 @@ void main()
     OutFragPos = world_pos.xyz;
     OutViewPos = camera.world_pos.xyz;
     OutNormal = mat3(transpose(inverse(mat_model))) * vert.normal;
+    OutLocalHeight = vert.position.y;
     gl_Position = camera.viewproj * world_pos;
 }

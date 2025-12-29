@@ -5,7 +5,7 @@
 #include "terrain_chunk_instance.glsl"
 #include "grass_gen.h"
 
-layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 
 layout(std140, set = 2, binding = 0) uniform uSettings {
     GrassGenerationParams params;
@@ -40,9 +40,8 @@ void main() {
         Chunks[chunk_idx].world_translation = ivec2(chunk_x, chunk_z);
     }
 
-    // uint idx = gl_GlobalInvocationID.x +
-    //     (gl_GlobalInvocationID.y * params.grass_per_chunk * params.terrain_width);
-    uint idx = chunk_idx + gl_LocalInvocationIndex;
+    uint idx = gl_GlobalInvocationID.x +
+        (gl_GlobalInvocationID.y * params.grass_per_chunk * params.terrain_width);
     Grassblades[idx].rotation = FLAG_ON(GRASS_ROTATE) ? rand(cos(idx) * sin(time)) * PI : 0.f;
 
     float off_x = 0.f;
@@ -53,4 +52,7 @@ void main() {
     }
 
     Grassblades[idx].chunk_index = chunk_idx;
+    Grassblades[idx].relative_translation.x = (gl_LocalInvocationID.x / float(params.grass_per_chunk)) - .5f;
+    Grassblades[idx].relative_translation.y = (gl_LocalInvocationID.y / float(params.grass_per_chunk)) - .5f;
+
 }

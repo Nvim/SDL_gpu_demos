@@ -615,11 +615,11 @@ GrassProgram::DrawGui()
   }
 
   if (ImGui::Begin("Stats")) {
-      auto& p = grass_gen_params_;
-      ImGui::Text("Total grassblades: %d",
-                  p.grass_per_chunk * p.grass_per_chunk * p.terrain_width *
+    auto& p = grass_gen_params_;
+    ImGui::Text("Total grassblades: %d",
+                p.grass_per_chunk * p.grass_per_chunk * p.terrain_width *
                   p.terrain_width);
-      ImGui::Text("Total chunks: %d", p.terrain_width * p.terrain_width);
+    ImGui::Text("Total chunks: %d", p.terrain_width * p.terrain_width);
     ImGui::End();
   }
   if (ImGui::Begin("Settings")) {
@@ -655,6 +655,7 @@ GrassProgram::DrawGui()
       ImGui::TreePop();
     }
     if (ImGui::TreeNode("Terrain")) {
+      ImGui::Checkbox("Draw terrain", &draw_terrain_);
       ImGui::SliderInt("World size", &terrain_params_.world_size, 1, 256);
       ImGui::SliderFloat(
         "Heightmap scale", &terrain_params_.heightmap_scale, 1.f, 128.f);
