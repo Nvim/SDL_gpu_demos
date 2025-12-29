@@ -43,7 +43,8 @@ class GrassProgram : public Program
   static constexpr SDL_GPUTextureFormat DEPTH_FORMAT =
     SDL_GPU_TEXTUREFORMAT_D16_UNORM;
 
-  static constexpr u64 GRASS_INSTANCE_SZ = 32;
+  static constexpr u64 CHUNK_INSTANCE_SZ = 8;
+  static constexpr u64 GRASS_INSTANCE_SZ = 16;
 
 public:
   GrassProgram(SDL_GPUDevice* device,
@@ -68,6 +69,7 @@ private:
 
 private:
   bool quit_{ false };
+  bool draw_terrain_{true};
   i32 window_w_;
   i32 window_h_;
   i32 rendertarget_w_;
@@ -88,7 +90,7 @@ private:
                                            .flags =
                                              GRASS_ROTATE | GRASS_OFFSET_POS,
                                            .terrain_width = 16,
-                                           .grass_per_chunk = 32,
+                                           .grass_per_chunk = 1,
                                            .offset_cap = .2f,
                                            .density = 12.f };
   bool regenerate_grass_{ false };

@@ -16,16 +16,25 @@ layout(location = 1) out vec3 OutViewPos;
 layout(location = 2) out vec3 OutFragPos;
 layout(location = 3) out vec3 OutNormal;
 
-layout(std430, set = 0, binding = 0) readonly buffer VertexBuffer {
+layout(set = 0, binding = 0) uniform sampler2D TexNoise;
+
+layout(std430, set = 0, binding = 1) readonly buffer VertexBuffer {
     Vertex Vertices[];
 };
 
-layout(std430, set = 0, binding = 1) readonly buffer InstanceBuffer {
+layout(std430, set = 0, binding = 2) readonly buffer InstanceBuffer {
     GrassInstance Instances[];
 };
 
 layout(std140, set = 1, binding = 0) uniform uCamera {
     CameraBinding camera;
+};
+
+layout(std140, set = 1, binding = 1) uniform uTerrain {
+    int terrain_width;
+    int world_size;
+    float heightmap_scale; // different scale for Y
+    int highlight_chunks;
 };
 
 mat4 modelFromWorldPos(in vec3 worldPos) {
@@ -51,19 +60,50 @@ mat4 rotateY(float angle)
     );
 }
 
+// uniform scale diagonal matrix
+mat4 scaleWorldPos(in vec3 worldPos, in float scale) {
+    mat4 m = mat4(1.0);
+    for (uint i = 0; i < 3; i++) {
+        m[i][i] = scale;
+    }
+    return m;
+}
+
+const vec3 base_color = vec3(.19f, .44f, .12f);
 void main()
 {
     Vertex vert = Vertices[gl_VertexIndex];
     GrassInstance instance = Instances[gl_InstanceIndex];
 
-    vec3 inPos = vert.position;
-    mat4 mat_m = modelFromWorldPos(instance.world_pos);
-    mat_m *= rotateY(instance.rotation);
-    vec4 relative_pos = mat_m * vec4(inPos, 1.0);
+    float world_scale = float(world_size) / float(terrain_width);
+    vec3 translation = vec3(instance.world_pos.x * world_scale,
+            1.f,
+            instance.world_pos.z * world_scale);
 
-    OutFragColor = instance.color;
-    OutFragPos = relative_pos.xyz;
+    vec2 uv = vec2(
+            (instance.world_pos.x / terrain_width) + .5f,
+            (instance.world_pos.z / terrain_width) + .5f
+        );
+    float height = texture(TexNoise, uv).r;
+
+    translation.y = (height - .5f) * heightmap_scale;
+    mat4 mat_translate = modelFromWorldPos(translation);
+    // mat4 mat_scale = scaleWorldPos(translation, world_scale);
+    mat4 mat_model = mat_translate;
+    mat_model *= rotateY(instance.rotation);
+    vec4 world_pos = mat_model * vec4(vert.position, 1.0);
+
+    // vec2 uv = vec2(
+    //         ((world_pos.x / world_scale) / terrain_width) + .5f,
+    //         ((world_pos.z / world_scale) / terrain_width) + .5f
+    //     );
+    // float height = texture(TexNoise, uv).r;
+    // world_pos.y = (height - .5f) * heightmap_scale;
+    // world_pos = modelFromWorldPos(vec3(0.f, (height - .5f) * heightmap_scale, 0.f)) * world_pos;
+
+    OutFragColor = base_color;
+    OutFragPos = world_pos.xyz;
     OutViewPos = camera.world_pos.xyz;
-    OutNormal = mat3(transpose(inverse(mat_m))) * vert.normal;
-    gl_Position = camera.viewproj * relative_pos;
+    OutNormal = mat3(transpose(inverse(mat_model))) * vert.normal;
+    gl_Position = camera.viewproj * world_pos;
 }

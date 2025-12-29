@@ -31,7 +31,7 @@ GrassProgram::GrassProgram(SDL_GPUDevice* device,
   rendertarget_w_ = window_w_ * (3 / 4.f);
   camera_.SetAspect((f32)rendertarget_w_ / (f32)rendertarget_h_);
   camera_.SetNearFar(.1f, 1000.f);
-  camera_.Position = { 2.5f, 20.f, 4.5f };
+  camera_.Position = { 2.5f, 10.f, 4.5f };
   camera_.Pitch = -13.f;
   camera_.Yaw = -25.f;
   {
@@ -175,7 +175,7 @@ GrassProgram::GenerateGrassblades()
       buf_info.usage = SDL_GPU_BUFFERUSAGE_COMPUTE_STORAGE_WRITE |
                        SDL_GPU_BUFFERUSAGE_GRAPHICS_STORAGE_READ;
     }
-    auto ret = SDL_CreateGPUBuffer(Device, &buf_info);
+    auto* ret = SDL_CreateGPUBuffer(Device, &buf_info);
     if (!ret) {
       LOG_ERROR("Couldn't create instance buffer: {}", GETERR);
       return false;
@@ -189,7 +189,7 @@ GrassProgram::GenerateGrassblades()
   {
     SDL_GPUBufferCreateInfo buf_info{};
     {
-      buf_info.size = total_chunks * 16;
+      buf_info.size = total_chunks * CHUNK_INSTANCE_SZ;
       buf_info.usage = SDL_GPU_BUFFERUSAGE_COMPUTE_STORAGE_WRITE |
                        SDL_GPU_BUFFERUSAGE_GRAPHICS_STORAGE_READ;
     }
@@ -290,30 +290,36 @@ GrassProgram::Draw()
 
     SDL_SetGPUViewport(scene_pass, &scene_vp);
 
-    // { // grass
-    //   static SDL_GPUBuffer* bufs[2]{ grassblade_vertices_,
-    //                                  grassblade_instances_ };
-    //   SDL_BindGPUGraphicsPipeline(scene_pass, grass_pipeline_);
-    //
-    //   SDL_BindGPUVertexStorageBuffers(scene_pass, 0, bufs, 2);
-    //   SDL_PushGPUVertexUniformData(
-    //     cmdbuf, 0, &camera_bind, sizeof(camera_bind));
-    //
-    //   SDL_PushGPUFragmentUniformData(cmdbuf, 0, &sunlight_,
-    //   sizeof(sunlight_));
-    //
-    //   SDL_BindGPUIndexBuffer(
-    //     scene_pass, &idx_bind, SDL_GPU_INDEXELEMENTSIZE_32BIT);
-    //
-    //   auto& p = grass_gen_params_;
-    //   auto blades_per_chunk = p.grass_per_chunk * p.grass_per_chunk;
-    //   auto total_chunks = p.terrain_width * p.terrain_width;
-    //   SDL_DrawGPUIndexedPrimitives(
-    //     scene_pass, index_count_, total_chunks * blades_per_chunk, 0, 0, 0);
-    // }
-    { // terrain
-      static const SDL_GPUTextureSamplerBinding b{ noise_texture_,
-                                                   noise_sampler_ };
+    static const SDL_GPUTextureSamplerBinding b{ noise_texture_,
+
+                                                 noise_sampler_ };
+    { // grass
+      SDL_BindGPUGraphicsPipeline(scene_pass, grass_pipeline_);
+
+      SDL_BindGPUVertexSamplers(scene_pass, 0, &b, 1);
+      SDL_BindGPUVertexStorageBuffers(scene_pass, 0, &grassblade_vertices_, 1);
+      SDL_BindGPUVertexStorageBuffers(scene_pass, 1, &grassblade_instances_, 1);
+      SDL_PushGPUVertexUniformData(
+        cmdbuf, 0, &camera_bind, sizeof(camera_bind));
+      SDL_PushGPUVertexUniformData(
+        cmdbuf, 1, &terrain_params_, sizeof(terrain_params_));
+
+      SDL_PushGPUFragmentUniformData(cmdbuf, 0, &sunlight_, sizeof(sunlight_));
+
+      SDL_BindGPUIndexBuffer(
+        scene_pass, &grass_idx_bind, SDL_GPU_INDEXELEMENTSIZE_32BIT);
+
+      auto& p = grass_gen_params_;
+      auto blades_per_chunk = p.grass_per_chunk * p.grass_per_chunk;
+      auto total_chunks = p.terrain_width * p.terrain_width;
+      SDL_DrawGPUIndexedPrimitives(scene_pass,
+                                   grassblade_index_count_,
+                                   total_chunks * blades_per_chunk,
+                                   0,
+                                   0,
+                                   0);
+    }
+    if (draw_terrain_) { // terrain
       SDL_BindGPUGraphicsPipeline(scene_pass, terrain_pipeline_);
 
       SDL_BindGPUVertexSamplers(scene_pass, 0, &b, 1);
@@ -451,7 +457,7 @@ GrassProgram::CreateGraphicsPipelines()
     .EnableDepthWrite(DEPTH_FORMAT);
 
   { // Grass
-    auto vert = LoadShader(GRASS_VS_PATH, Device, 0, 1, 2, 0);
+    auto vert = LoadShader(GRASS_VS_PATH, Device, 1, 2, 2, 0);
     if (vert == nullptr) {
       LOG_ERROR("Couldn't load vertex shader at path {}", GRASS_VS_PATH);
       return false;
@@ -507,12 +513,13 @@ GrassProgram::CreateComputePipeline()
   LOG_TRACE("CubeProgram::CreateComputePipeline");
 
   ComputePipelineBuilder builder{};
+  const auto tcount = grass_gen_params_.grass_per_chunk;
   generate_grass_pipeline_ = builder //
                                .SetReadOnlyStorageTextureCount(0)
                                .SetReadWriteStorageTextureCount(0)
                                .SetReadWriteStorageBufferCount(2)
                                .SetUBOCount(2)
-                               .SetThreadCount(32, 32, 1)
+                               .SetThreadCount(tcount, tcount, 1)
                                .SetShader(COMP_PATH)
                                .Build(Device);
 
@@ -606,13 +613,24 @@ GrassProgram::DrawGui()
     ImGui::DockSpaceOverViewport(0, ImGui::GetMainViewport());
   }
 
+  if (ImGui::Begin("Stats")) {
+      auto& p = grass_gen_params_;
+      ImGui::Text("Total grassblades: %d",
+                  p.grass_per_chunk * p.grass_per_chunk * p.terrain_width *
+                  p.terrain_width);
+      ImGui::Text("Total chunks: %d", p.terrain_width * p.terrain_width);
+    ImGui::End();
+  }
   if (ImGui::Begin("Settings")) {
-    ImGui::Text("Window Width: %d", window_w_);
-    ImGui::Text("Window Height: %d", window_h_);
-    ImGui::Text("Rendertarget Width: %d", rendertarget_w_);
-    ImGui::Text("Rendertarget Height: %d", rendertarget_h_);
-    ImGui::Text("Aspect Ratio: %f",
-                (f32)rendertarget_w_ / (f32)rendertarget_h_);
+    if (ImGui::TreeNode("Viewport")) {
+      ImGui::Text("Window Width: %d", window_w_);
+      ImGui::Text("Window Height: %d", window_h_);
+      ImGui::Text("Rendertarget Width: %d", rendertarget_w_);
+      ImGui::Text("Rendertarget Height: %d", rendertarget_h_);
+      ImGui::Text("Aspect Ratio: %f",
+                  (f32)rendertarget_w_ / (f32)rendertarget_h_);
+      ImGui::TreePop();
+    }
     if (ImGui::TreeNode("Camera")) {
       ImGui::Text("Position");
       if (ImGui::SliderFloat3(
@@ -639,7 +657,8 @@ GrassProgram::DrawGui()
       ImGui::SliderInt("World size", &terrain_params_.world_size, 1, 256);
       ImGui::SliderFloat(
         "Heightmap scale", &terrain_params_.heightmap_scale, 1.f, 128.f);
-      ImGui::Checkbox("Highlight chunks", (bool*)&terrain_params_.highlight_chunks);
+      ImGui::Checkbox("Highlight chunks",
+                      (bool*)&terrain_params_.highlight_chunks);
       ImGui::TreePop();
     }
     if (ImGui::TreeNode("Grass Generation")) {
