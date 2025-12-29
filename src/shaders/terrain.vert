@@ -23,8 +23,9 @@ layout(std140, set = 1, binding = 0) uniform uCamera {
 
 layout(std140, set = 1, binding = 1) uniform uTerrain {
     int terrain_width;
-    int world_scale;
+    int world_size;
     float heightmap_scale; // different scale for Y
+    int highlight_chunks;
 };
 
 mat4 modelFromWorldPos(in vec3 worldPos) {
@@ -51,6 +52,8 @@ const Vertex Quad[4] = Vertex[4](
         bot_left, bot_right, top_left, top_right
     );
 
+const vec3 base_color = vec3(.19f, .44f, .12f);
+
 void main()
 {
     Vertex vert = Quad[gl_VertexIndex];
@@ -61,6 +64,9 @@ void main()
     // int h = gl_InstanceIndex / terrain_width;
     float w = instance.world_translation.x;
     float h = instance.world_translation.y;
+
+    // float world_scale = world_size / terrain_width;
+    float world_scale = float(world_size) / float(terrain_width);
 
     vec3 translation = vec3(w * world_scale, 0.f, h * world_scale);
 
@@ -77,7 +83,10 @@ void main()
     float height = texture(TexNoise, uv).r;
     world_pos.y = (height - .5f) * heightmap_scale;
 
-    vec3 base_color = vec3(.19f, .44f, .12f);
-    OutFragColor = base_color * (height * .75f + .25f);
     gl_Position = camera.viewproj * world_pos;
+    if (highlight_chunks != 0) {
+        OutFragColor = vec3(vert.position.x+.5f, .2f, vert.position.z+.5f);
+        return;
+    }
+    OutFragColor = base_color * (height * .75f + .25f);
 }

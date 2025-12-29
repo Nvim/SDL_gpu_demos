@@ -636,15 +636,16 @@ GrassProgram::DrawGui()
       ImGui::TreePop();
     }
     if (ImGui::TreeNode("Terrain")) {
-      ImGui::SliderInt("World scale", &terrain_params_.world_scale, 1, 32);
+      ImGui::SliderInt("World size", &terrain_params_.world_size, 1, 256);
       ImGui::SliderFloat(
         "Heightmap scale", &terrain_params_.heightmap_scale, 1.f, 128.f);
+      ImGui::Checkbox("Highlight chunks", (bool*)&terrain_params_.highlight_chunks);
       ImGui::TreePop();
     }
     if (ImGui::TreeNode("Grass Generation")) {
       static auto tmp_params = grass_gen_params_; // copy to apply all at once
       ImGui::ColorEdit3("Base Color:", (f32*)&tmp_params.base_color);
-      ImGui::SliderInt("Chunk count", (i32*)&tmp_params.terrain_width, 4, 256);
+      ImGui::SliderInt("Chunk count", (i32*)&tmp_params.terrain_width, 4, 64);
       ImGui::SliderInt(
         "Grassblades per chunk", (i32*)&tmp_params.grass_per_chunk, 1.f, 32.f);
       ImGui::SliderFloat("Density", (f32*)&tmp_params.density, 1.f, 20.f);
