@@ -14,16 +14,28 @@ class Engine;
 
 namespace grass {
 
+struct TerrainBinding
+{
+  i32 terrain_width;
+  i32 world_size;
+  f32 heightmap_scale;
+  i32 highlight_chunks;
+};
+
 class GrassProgram : public Program
 {
   using path = std::filesystem::path;
 
   const path SKYBOX_PATH{ "resources/textures/puresky.hdr" };
   const path GRASS_PATH{ "resources/models/single_grass_blade.glb" };
-  static constexpr const char* VS_PATH =
+  static constexpr const char* GRASS_VS_PATH =
     "resources/shaders/compiled/grass.vert.spv";
-  static constexpr const char* FS_PATH =
+  static constexpr const char* GRASS_FS_PATH =
     "resources/shaders/compiled/grass.frag.spv";
+  static constexpr const char* TERRAIN_VS_PATH =
+    "resources/shaders/compiled/terrain.vert.spv";
+  static constexpr const char* TERRAIN_FS_PATH =
+    "resources/shaders/compiled/color.frag.spv";
   static constexpr const char* COMP_PATH =
     "resources/shaders/compiled/generate_grass.comp.spv";
   static constexpr SDL_GPUTextureFormat TARGET_FORMAT =
@@ -31,7 +43,8 @@ class GrassProgram : public Program
   static constexpr SDL_GPUTextureFormat DEPTH_FORMAT =
     SDL_GPU_TEXTUREFORMAT_D16_UNORM;
 
-  static constexpr u64 GRASS_INSTANCE_SZ = 32;
+  static constexpr u64 CHUNK_INSTANCE_SZ = 8;
+  static constexpr u64 GRASS_INSTANCE_SZ = 16;
 
 public:
   GrassProgram(SDL_GPUDevice* device,
@@ -48,42 +61,62 @@ public:
 private:
   bool InitGui();
   bool CreateRenderTargets();
-  bool CreatePipeline();
+  bool CreateGraphicsPipelines();
   bool CreateComputePipeline();
   bool UploadVertexData();
   bool GenerateGrassblades();
+  void DrawGrass(SDL_GPURenderPass* pass,
+                 SDL_GPUCommandBuffer* cmdbuf,
+                 CameraBinding& camera);
+  void DrawTerrain(SDL_GPURenderPass* pass,
+                   SDL_GPUCommandBuffer* cmdbuf,
+                   CameraBinding& camera);
   ImDrawData* DrawGui();
 
 private:
   bool quit_{ false };
+  bool draw_terrain_{ true };
+  bool draw_grass_{ true };
   i32 window_w_;
   i32 window_h_;
   i32 rendertarget_w_;
   i32 rendertarget_h_;
-  u32 index_count_{ 0 };
+  u32 grassblade_index_count_{ 0 };
   Camera camera_{};
   Skybox skybox_{ SKYBOX_PATH, EnginePtr, TARGET_FORMAT };
-  Grid grid_{ EnginePtr, TARGET_FORMAT };
   DirLightBinding sunlight_;
-  GrassGenerationParams grass_gen_params_{ glm::vec3{ .19f, .44f, .12f },
-                                           GRASS_ROTATE | GRASS_OFFSET_POS,
-                                           4,
-                                           32,
-                                           .2f,
-                                           12.f };
+  TerrainBinding terrain_params_{
+    .terrain_width = 16,
+    .world_size = 32,
+    .heightmap_scale = 4.f,
+    .highlight_chunks = 0,
+  };
+  GrassGenerationParams grass_gen_params_{ .base_color =
+                                             glm::vec3{ .19f, .44f, .12f },
+                                           .flags =
+                                             GRASS_ROTATE | GRASS_OFFSET_POS,
+                                           .terrain_width = 16,
+                                           .grass_per_chunk = 16,
+                                           .offset_cap = .2f,
+                                           .density = 12.f };
   bool regenerate_grass_{ false };
 
   // GPU Resources:
   SDL_GPUTexture* depth_target_{ nullptr };
   SDL_GPUTexture* scene_target_{ nullptr };
-  SDL_GPUGraphicsPipeline* pipeline_{ nullptr };
+  SDL_GPUTexture* noise_texture_{ nullptr };
+  SDL_GPUSampler* noise_sampler_{ nullptr };
+  SDL_GPUGraphicsPipeline* grass_pipeline_{ nullptr };
+  SDL_GPUGraphicsPipeline* terrain_pipeline_{ nullptr };
   SDL_GPUComputePipeline* generate_grass_pipeline_{ nullptr };
   SDL_GPUColorTargetInfo scene_color_target_info_{};
   SDL_GPUDepthStencilTargetInfo scene_depth_target_info_{};
   SDL_GPUColorTargetInfo swapchain_target_info_{};
-  SDL_GPUBuffer* index_buffer_{ nullptr };
-  SDL_GPUBuffer* instance_buffer_{ nullptr };
-  SDL_GPUBuffer* vertex_ssbo_{ nullptr };
+  SDL_GPUBuffer* grassblade_vertices_{ nullptr };
+  SDL_GPUBuffer* grassblade_indices_{ nullptr };
+  SDL_GPUBuffer* grassblade_instances_{ nullptr };
+  SDL_GPUBuffer* chunk_indices_{ nullptr };
+  SDL_GPUBuffer* chunk_instances_{ nullptr };
 };
 
 } // namespace grass

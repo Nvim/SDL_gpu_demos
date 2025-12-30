@@ -2,6 +2,7 @@
 
 #extension GL_GOOGLE_include_directive : require
 #include "grass_instance.glsl"
+#include "terrain_chunk_instance.glsl"
 #include "grass_gen.h"
 
 layout(local_size_x = 32, local_size_y = 32, local_size_z = 1) in;
@@ -14,8 +15,12 @@ layout(std140, set = 2, binding = 1) uniform uTime {
     float time;
 };
 
-layout(set = 1, binding = 0) writeonly buffer InstanceBuffer {
-    GrassInstance Instances[];
+layout(set = 1, binding = 0) writeonly buffer GrassInstances {
+    GrassInstance Grassblades[];
+};
+
+layout(set = 1, binding = 1) writeonly buffer ChunkInstances {
+    ChunkInstance Chunks[];
 };
 
 float rand(float x) {
@@ -26,10 +31,24 @@ float rand(float x) {
 const float PI = 3.14159265358979323846;
 
 void main() {
-    uint idx = gl_GlobalInvocationID.x + (gl_GlobalInvocationID.y * params.grass_per_chunk*params.chunk_count);
-    Instances[idx].color = params.base_color.xyz;
+    if (gl_LocalInvocationID.x >= params.grass_per_chunk ||
+            gl_LocalInvocationID.y >= params.grass_per_chunk) {
+        return;
+    }
 
-    Instances[idx].rotation = FLAG_ON(GRASS_ROTATE) ? rand(idx*sin(time)) * PI : 0.f;
+    // Each workgroup processes a single terrain chunk for now
+    uint chunk_idx = gl_WorkGroupID.x + (gl_WorkGroupID.y * params.terrain_width);
+    if (gl_LocalInvocationIndex == 0) {
+        int chunk_x = int(gl_WorkGroupID.x) - int(params.terrain_width / 2);
+        int chunk_z = int(gl_WorkGroupID.y) - int(params.terrain_width / 2);
+        Chunks[chunk_idx].world_translation = ivec2(chunk_x, chunk_z);
+    }
+
+    uvec3 wg_size = uvec3(params.grass_per_chunk, params.grass_per_chunk, 1);
+    uvec3 global_id = gl_WorkGroupID * wg_size + gl_LocalInvocationID;
+    uint idx = global_id.x +
+            (global_id.y * params.grass_per_chunk * params.terrain_width);
+    Grassblades[idx].rotation = FLAG_ON(GRASS_ROTATE) ? rand(cos(idx) * sin(time)) * PI : 0.f;
 
     float off_x = 0.f;
     float off_z = 0.f;
@@ -38,6 +57,7 @@ void main() {
         off_z = mod(rand(cos(time)) * 2 - 1, params.offset_cap);
     }
 
-    Instances[idx].world_pos = vec3((gl_GlobalInvocationID.x / params.density) + off_x,
-            0.f, (gl_GlobalInvocationID.y / params.density) + off_z);
+    Grassblades[idx].chunk_index = chunk_idx;
+    Grassblades[idx].relative_translation.x = (gl_LocalInvocationID.x / float(params.grass_per_chunk)) - .5f;
+    Grassblades[idx].relative_translation.y = (gl_LocalInvocationID.y / float(params.grass_per_chunk)) - .5f;
 }

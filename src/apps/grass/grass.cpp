@@ -1,9 +1,11 @@
+#include <SDL3/SDL_gpu.h>
 #include <pch.h>
 
 #include "grass.h"
 
 #include "common/compute_pipeline_builder.h"
 #include "common/gltf_loader.h"
+#include "common/loaded_image.h"
 #include "common/logger.h"
 #include "common/pipeline_builder.h"
 #include "common/types.h"
@@ -28,7 +30,8 @@ GrassProgram::GrassProgram(SDL_GPUDevice* device,
   rendertarget_h_ = window_h_ * (3 / 4.f);
   rendertarget_w_ = window_w_ * (3 / 4.f);
   camera_.SetAspect((f32)rendertarget_w_ / (f32)rendertarget_h_);
-  camera_.Position = { 2.5, 1.25, 4.5 };
+  camera_.SetNearFar(.1f, 1000.f);
+  camera_.Position = { 2.5f, 10.f, 4.5f };
   camera_.Pitch = -13.f;
   camera_.Yaw = -25.f;
   {
@@ -59,9 +62,17 @@ GrassProgram::GrassProgram(SDL_GPUDevice* device,
 GrassProgram::~GrassProgram()
 {
   LOG_DEBUG("Destroying GrassProgram");
-  RELEASE_IF(pipeline_, SDL_ReleaseGPUGraphicsPipeline);
-  RELEASE_IF(index_buffer_, SDL_ReleaseGPUBuffer);
-  RELEASE_IF(vertex_ssbo_, SDL_ReleaseGPUBuffer);
+
+  RELEASE_IF(grass_pipeline_, SDL_ReleaseGPUGraphicsPipeline);
+  RELEASE_IF(grassblade_indices_, SDL_ReleaseGPUBuffer);
+  RELEASE_IF(grassblade_vertices_, SDL_ReleaseGPUBuffer);
+  RELEASE_IF(grassblade_instances_, SDL_ReleaseGPUBuffer);
+
+  RELEASE_IF(terrain_pipeline_, SDL_ReleaseGPUGraphicsPipeline);
+  RELEASE_IF(chunk_indices_, SDL_ReleaseGPUBuffer);
+  RELEASE_IF(chunk_instances_, SDL_ReleaseGPUBuffer);
+
+  RELEASE_IF(noise_texture_, SDL_ReleaseGPUTexture);
   SDL_WaitForGPUIdle(Device);
   ImGui_ImplSDL3_Shutdown();
   ImGui_ImplSDLGPU3_Shutdown();
@@ -80,15 +91,11 @@ GrassProgram::Init()
     LOG_CRITICAL("Couldn't load skybox");
     return false;
   }
-  if (!grid_.IsLoaded()) {
-    LOG_CRITICAL("Couldn't load grid");
-    return false;
-  }
   if (!CreateRenderTargets()) {
     LOG_CRITICAL("Couldn't create render targets");
     return false;
   }
-  if (!CreatePipeline()) {
+  if (!CreateGraphicsPipelines()) {
     LOG_CRITICAL("Couldn't create graphics pipeline");
     return false;
   }
@@ -100,6 +107,39 @@ GrassProgram::Init()
   if (!UploadVertexData()) {
     LOG_CRITICAL("Couldn't create grassblade ssbo & index buffers");
     return false;
+  }
+
+  { // noise
+    SDL_GPUTextureCreateInfo info{};
+    {
+      info.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
+      info.height = 128;
+      info.width = 128;
+      info.num_levels = 1;
+      info.layer_count_or_depth = 1;
+      info.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER;
+    }
+    noise_texture_ = SDL_CreateGPUTexture(Device, &info);
+    if (!noise_texture_) {
+      LOG_CRITICAL("Couldn't create noise texture");
+      return false;
+    }
+    LoadedImage noise_img{};
+    if (!ImageLoader::Load(
+          noise_img,
+          // "resources/textures/noise/128x128/Spokes/Spokes 10 - 128x128.png"
+          "resources/textures/noise/128x128/Manifold/Manifold 13 - 128x128.png"
+          //
+          )) {
+      LOG_CRITICAL("Couldn't load noise image");
+      return false;
+    }
+
+    if (!EnginePtr->UploadTo2DTexture(noise_texture_, noise_img)) {
+      LOG_CRITICAL("Couldn't upload to noise texture");
+      return false;
+    }
+    noise_sampler_ = EnginePtr->LinearRepeatSampler();
   }
 
   if (!GenerateGrassblades()) {
@@ -115,56 +155,84 @@ GrassProgram::GenerateGrassblades()
 {
   LOG_TRACE("GrassProgram::GenerateGrassblades");
   regenerate_grass_ = false;
-  static u32 prev_buffer_size = 0;
 
   auto& p = grass_gen_params_;
   auto blades_per_chunk = p.grass_per_chunk * p.grass_per_chunk;
-  auto total_chunks = p.chunk_count * p.chunk_count;
-  u32 sz = blades_per_chunk * total_chunks * GRASS_INSTANCE_SZ;
+  auto total_chunks = p.terrain_width * p.terrain_width;
 
-  // Only recreate buffer if size changed
-  if (sz != prev_buffer_size) {
-    LOG_DEBUG("Creating new instance buffer");
-    SDL_GPUBufferCreateInfo buf_info{};
-    {
-      buf_info.size = sz;
-      buf_info.usage = SDL_GPU_BUFFERUSAGE_COMPUTE_STORAGE_WRITE |
-                       SDL_GPU_BUFFERUSAGE_GRAPHICS_STORAGE_READ;
-    }
-    auto ret = SDL_CreateGPUBuffer(Device, &buf_info);
-    if (!ret) {
-      LOG_ERROR("Couldn't create instance buffer: {}", GETERR);
+  { // resize storage buffers if needed
+    static u64 prev_grassblades_size = 0;
+    static u64 prev_chunks_size = 0;
+
+    u32 new_grassblades_size =
+      blades_per_chunk * total_chunks * GRASS_INSTANCE_SZ;
+    u32 new_chunks_size = total_chunks * CHUNK_INSTANCE_SZ;
+
+    const auto resize_buffer =
+      [&](SDL_GPUBuffer** buf, u64 new_size, u64& prev_size) -> bool {
+      if (new_size != prev_size) {
+        LOG_DEBUG(
+          "Resizing storage buffer from {} to {} bytes", prev_size, new_size);
+        SDL_GPUBufferCreateInfo buf_info{};
+        {
+          buf_info.size = new_size;
+          buf_info.usage = SDL_GPU_BUFFERUSAGE_COMPUTE_STORAGE_WRITE |
+                           SDL_GPU_BUFFERUSAGE_GRAPHICS_STORAGE_READ;
+        }
+        auto* ret = SDL_CreateGPUBuffer(Device, &buf_info);
+        if (!ret) {
+          LOG_ERROR("Couldn't create storage buffer: {}", GETERR);
+          return false;
+        }
+        *buf = ret;
+        prev_size = new_size;
+      } else {
+        LOG_DEBUG("Skipped storage buffer re-creation");
+      }
+      return true;
+    };
+
+    if (!resize_buffer(&grassblade_instances_,
+                       new_grassblades_size,
+                       prev_grassblades_size)) {
+      LOG_ERROR("Couldn't resize grassblades buffer");
       return false;
     }
-    instance_buffer_ = ret;
-    prev_buffer_size = sz;
-  } else {
-    LOG_DEBUG("Skipped instance buffer re-creation");
+    if (!resize_buffer(&chunk_instances_, new_chunks_size, prev_chunks_size)) {
+      LOG_ERROR("Couldn't resize chunks buffer");
+      return false;
+    }
   }
 
-  SDL_GPUStorageBufferReadWriteBinding b;
-  {
-    b.buffer = instance_buffer_;
-    b.cycle = false;
+  { // Dispatch compute
+    SDL_GPUStorageBufferReadWriteBinding bindings[2];
+    {
+      bindings[0].buffer = grassblade_instances_;
+      bindings[0].cycle = false;
+      bindings[1].buffer = chunk_instances_;
+      bindings[1].cycle = false;
+    }
+
+    SDL_GPUCommandBuffer* cmd_buf = SDL_AcquireGPUCommandBuffer(Device);
+    if (cmd_buf == NULL) {
+      LOG_ERROR("Couldn't acquire command buffer: {}", GETERR);
+      return false;
+    }
+    auto* pass = SDL_BeginGPUComputePass(cmd_buf, nullptr, 0, bindings, 2);
+    SDL_BindGPUComputePipeline(pass, generate_grass_pipeline_);
+    SDL_BindGPUComputeStorageBuffers(pass, 0, &grassblade_instances_, 1);
+    SDL_BindGPUComputeStorageBuffers(pass, 1, &chunk_instances_, 1);
+    SDL_PushGPUComputeUniformData(
+      cmd_buf, 0, &grass_gen_params_, sizeof(GrassGenerationParams));
+    SDL_PushGPUComputeUniformData(cmd_buf, 1, &lastTime, sizeof(lastTime));
+    SDL_DispatchGPUCompute(pass, p.terrain_width, p.terrain_width, 1);
+    SDL_EndGPUComputePass(pass);
+    if (!SDL_SubmitGPUCommandBuffer(cmd_buf)) {
+      LOG_ERROR("Instance buffer generation failed: {}", GETERR);
+      return false;
+    }
   }
 
-  SDL_GPUCommandBuffer* cmd_buf = SDL_AcquireGPUCommandBuffer(Device);
-  if (cmd_buf == NULL) {
-    LOG_ERROR("Couldn't acquire command buffer: {}", GETERR);
-    return false;
-  }
-  auto* pass = SDL_BeginGPUComputePass(cmd_buf, nullptr, 0, &b, 1);
-  SDL_BindGPUComputePipeline(pass, generate_grass_pipeline_);
-  SDL_BindGPUComputeStorageBuffers(pass, 0, &instance_buffer_, 1);
-  SDL_PushGPUComputeUniformData(
-    cmd_buf, 0, &grass_gen_params_, sizeof(GrassGenerationParams));
-  SDL_PushGPUComputeUniformData(cmd_buf, 1, &lastTime, sizeof(lastTime));
-  SDL_DispatchGPUCompute(pass, p.chunk_count, p.chunk_count, 1);
-  SDL_EndGPUComputePass(pass);
-  if (!SDL_SubmitGPUCommandBuffer(cmd_buf)) {
-    LOG_ERROR("Instance buffer generation failed: {}", GETERR);
-    return false;
-  }
   return true;
 }
 
@@ -197,9 +265,6 @@ GrassProgram::Draw()
   static const SDL_GPUViewport scene_vp{
     0, 0, float(rendertarget_w_), float(rendertarget_h_), 0.1f, 1.0f
   };
-  // static const SDL_GPUBufferBinding vert_bind{ mesh_buffers_.VertexBuffer, 0
-  // };
-  static const SDL_GPUBufferBinding idx_bind{ index_buffer_, 0 };
 
   SDL_GPUCommandBuffer* cmdbuf = SDL_AcquireGPUCommandBuffer(Device);
   if (cmdbuf == NULL) {
@@ -233,21 +298,13 @@ GrassProgram::Draw()
 
     SDL_SetGPUViewport(scene_pass, &scene_vp);
 
-    SDL_BindGPUGraphicsPipeline(scene_pass, pipeline_);
-    SDL_PushGPUVertexUniformData(cmdbuf, 0, &camera_bind, sizeof(camera_bind));
-    SDL_PushGPUFragmentUniformData(cmdbuf, 0, &sunlight_, sizeof(sunlight_));
-    SDL_BindGPUVertexStorageBuffers(scene_pass, 0, &vertex_ssbo_, 1);
-    SDL_BindGPUVertexStorageBuffers(scene_pass, 1, &instance_buffer_, 1);
-    SDL_BindGPUIndexBuffer(
-      scene_pass, &idx_bind, SDL_GPU_INDEXELEMENTSIZE_32BIT);
+    if (draw_grass_) {
+      DrawGrass(scene_pass, cmdbuf, camera_bind);
+    }
+    if (draw_terrain_) {
+      DrawTerrain(scene_pass, cmdbuf, camera_bind);
+    }
 
-    auto& p = grass_gen_params_;
-    auto blades_per_chunk = p.grass_per_chunk * p.grass_per_chunk;
-    auto total_chunks = p.chunk_count * p.chunk_count;
-    SDL_DrawGPUIndexedPrimitives(
-      scene_pass, index_count_, total_chunks * blades_per_chunk, 0, 0, 0);
-
-    grid_.Draw(cmdbuf, scene_pass, camera_bind);
     skybox_.Draw(cmdbuf, scene_pass, camera_bind);
 
     SDL_EndGPURenderPass(scene_pass);
@@ -267,6 +324,58 @@ GrassProgram::Draw()
     return false;
   }
   return true;
+}
+
+void
+GrassProgram::DrawGrass(SDL_GPURenderPass* pass,
+                        SDL_GPUCommandBuffer* cmdbuf,
+                        CameraBinding& camera)
+{
+  static const SDL_GPUTextureSamplerBinding b{ noise_texture_, noise_sampler_ };
+  static const SDL_GPUBufferBinding grass_idx_bind{ grassblade_indices_, 0 };
+
+  SDL_BindGPUGraphicsPipeline(pass, grass_pipeline_);
+
+  SDL_BindGPUVertexSamplers(pass, 0, &b, 1);
+  SDL_BindGPUVertexStorageBuffers(pass, 0, &grassblade_vertices_, 1);
+  SDL_BindGPUVertexStorageBuffers(pass, 1, &grassblade_instances_, 1);
+  SDL_BindGPUVertexStorageBuffers(pass, 2, &chunk_instances_, 1);
+  SDL_PushGPUVertexUniformData(cmdbuf, 0, &camera, sizeof(camera));
+  SDL_PushGPUVertexUniformData(
+    cmdbuf, 1, &terrain_params_, sizeof(terrain_params_));
+
+  SDL_PushGPUFragmentUniformData(cmdbuf, 0, &sunlight_, sizeof(sunlight_));
+
+  SDL_BindGPUIndexBuffer(pass, &grass_idx_bind, SDL_GPU_INDEXELEMENTSIZE_32BIT);
+
+  auto& p = grass_gen_params_;
+  auto blades_per_chunk = p.grass_per_chunk * p.grass_per_chunk;
+  auto total_chunks = p.terrain_width * p.terrain_width;
+  SDL_DrawGPUIndexedPrimitives(
+    pass, grassblade_index_count_, total_chunks * blades_per_chunk, 0, 0, 0);
+}
+
+void
+GrassProgram::DrawTerrain(SDL_GPURenderPass* pass,
+                          SDL_GPUCommandBuffer* cmdbuf,
+                          CameraBinding& camera)
+{
+  static const SDL_GPUTextureSamplerBinding b{ noise_texture_, noise_sampler_ };
+  static const SDL_GPUBufferBinding chunk_idx_bind{ chunk_indices_, 0 };
+
+  SDL_BindGPUGraphicsPipeline(pass, terrain_pipeline_);
+
+  SDL_BindGPUVertexSamplers(pass, 0, &b, 1);
+  SDL_BindGPUVertexStorageBuffers(pass, 0, &chunk_instances_, 1);
+  SDL_PushGPUVertexUniformData(cmdbuf, 0, &camera, sizeof(camera));
+  SDL_PushGPUVertexUniformData(
+    cmdbuf, 1, &terrain_params_, sizeof(terrain_params_));
+
+  SDL_BindGPUIndexBuffer(pass, &chunk_idx_bind, SDL_GPU_INDEXELEMENTSIZE_32BIT);
+
+  auto& p = grass_gen_params_;
+  auto total_chunks = p.terrain_width * p.terrain_width;
+  SDL_DrawGPUIndexedPrimitives(pass, 6, total_chunks, 0, 0, 0);
 }
 
 bool
@@ -354,37 +463,66 @@ GrassProgram::CreateRenderTargets()
 }
 
 bool
-GrassProgram::CreatePipeline()
+GrassProgram::CreateGraphicsPipelines()
 {
-  LOG_TRACE("GrassProgram::CreatePipeline");
-  auto vert = LoadShader(VS_PATH, Device, 0, 1, 2, 0);
-  if (vert == nullptr) {
-    LOG_ERROR("Couldn't load vertex shader at path {}", VS_PATH);
-    return false;
-  }
-  auto frag = LoadShader(FS_PATH, Device, 0, 1, 0, 0);
-  if (frag == nullptr) {
-    LOG_ERROR("Couldn't load fragment shader at path {}", FS_PATH);
-    return false;
-  }
+  LOG_TRACE("GrassProgram::CreateGraphicsPipelines");
+
   PipelineBuilder builder;
   builder //
     .AddColorTarget(TARGET_FORMAT, false)
-    .SetVertexShader(vert)
-    .SetFragmentShader(frag)
     .SetPrimitiveType(SDL_GPU_PRIMITIVETYPE_TRIANGLELIST)
     .EnableDepthTest()
     .SetCompareOp(SDL_GPU_COMPAREOP_LESS)
     .EnableDepthWrite(DEPTH_FORMAT);
 
-  pipeline_ = builder.Build(Device);
-  if (!pipeline_) {
-    LOG_ERROR("Couldn't build pipeline: {}", GETERR);
-    return false;
+  { // Grass
+    auto vert = LoadShader(GRASS_VS_PATH, Device, 1, 2, 3, 0);
+    if (vert == nullptr) {
+      LOG_ERROR("Couldn't load vertex shader at path {}", GRASS_VS_PATH);
+      return false;
+    }
+    auto frag = LoadShader(GRASS_FS_PATH, Device, 0, 1, 0, 0);
+    if (frag == nullptr) {
+      LOG_ERROR("Couldn't load fragment shader at path {}", GRASS_FS_PATH);
+      return false;
+    }
+    grass_pipeline_ = builder //
+                        .SetVertexShader(vert)
+                        .SetFragmentShader(frag)
+                        .Build(Device);
+
+    if (!grass_pipeline_) {
+      LOG_ERROR("Couldn't build pipeline: {}", GETERR);
+      return false;
+    }
+
+    SDL_ReleaseGPUShader(Device, frag);
+    SDL_ReleaseGPUShader(Device, vert);
   }
 
-  SDL_ReleaseGPUShader(Device, frag);
-  SDL_ReleaseGPUShader(Device, vert);
+  { // Terrain
+    auto vert = LoadShader(TERRAIN_VS_PATH, Device, 1, 2, 1, 0);
+    if (vert == nullptr) {
+      LOG_ERROR("Couldn't load vertex shader at path {}", TERRAIN_VS_PATH);
+      return false;
+    }
+    auto frag = LoadShader(TERRAIN_FS_PATH, Device, 0, 0, 0, 0);
+    if (frag == nullptr) {
+      LOG_ERROR("Couldn't load fragment shader at path {}", TERRAIN_FS_PATH);
+      return false;
+    }
+    terrain_pipeline_ = builder //
+                          .SetVertexShader(vert)
+                          .SetFragmentShader(frag)
+                          .Build(Device);
+    if (!terrain_pipeline_) {
+      LOG_ERROR("Couldn't build pipeline: {}", GETERR);
+      return false;
+    }
+
+    SDL_ReleaseGPUShader(Device, frag);
+    SDL_ReleaseGPUShader(Device, vert);
+  }
   return true;
 }
 
@@ -394,12 +532,13 @@ GrassProgram::CreateComputePipeline()
   LOG_TRACE("CubeProgram::CreateComputePipeline");
 
   ComputePipelineBuilder builder{};
+  const auto tcount = grass_gen_params_.grass_per_chunk;
   generate_grass_pipeline_ = builder //
                                .SetReadOnlyStorageTextureCount(0)
                                .SetReadWriteStorageTextureCount(0)
-                               .SetReadWriteStorageBufferCount(1)
+                               .SetReadWriteStorageBufferCount(2)
                                .SetUBOCount(2)
-                               .SetThreadCount(32, 32, 1)
+                               .SetThreadCount(tcount, tcount, 1)
                                .SetShader(COMP_PATH)
                                .Build(Device);
 
@@ -416,6 +555,7 @@ GrassProgram::UploadVertexData()
   LOG_TRACE("GrassProgram::UploadVertexData");
   std::vector<PosNormalVertex_Aligned> vertices{};
   std::vector<u32> indices{};
+  constexpr std::array<u32, 6> chunk_idx{ 0, 1, 2, 1, 3, 2 };
 
   if (!GLTFLoader::LoadPositions(GRASS_PATH, vertices, indices, 0)) {
     LOG_ERROR("Couldn't load vertex data");
@@ -423,18 +563,26 @@ GrassProgram::UploadVertexData()
   }
 
   auto vert_count = vertices.size();
-  index_count_ = indices.size();
-  LOG_DEBUG(
-    "Grassblade has {} vertices and {} indices", vert_count, index_count_);
+  grassblade_index_count_ = indices.size();
+  LOG_DEBUG("Grassblade has {} vertices and {} indices",
+            vert_count,
+            grassblade_index_count_);
   {
     SDL_GPUBufferCreateInfo idxInfo{};
     {
       idxInfo.usage = SDL_GPU_BUFFERUSAGE_INDEX;
-      idxInfo.size = static_cast<u32>(sizeof(u32) * index_count_);
+      idxInfo.size = static_cast<u32>(sizeof(u32) * grassblade_index_count_);
     }
-    index_buffer_ = SDL_CreateGPUBuffer(Device, &idxInfo);
-    if (!index_buffer_) {
-      LOG_ERROR("couldn't create index buffer");
+    grassblade_indices_ = SDL_CreateGPUBuffer(Device, &idxInfo);
+    if (!grassblade_indices_) {
+      LOG_ERROR("couldn't create grassblades index buffer");
+      return false;
+    }
+
+    idxInfo.size = 6 * sizeof(u32);
+    chunk_indices_ = SDL_CreateGPUBuffer(Device, &idxInfo);
+    if (!chunk_indices_) {
+      LOG_ERROR("couldn't create chunks index buffer");
       return false;
     }
   }
@@ -445,18 +593,24 @@ GrassProgram::UploadVertexData()
       ssbo_info.size =
         static_cast<u32>(sizeof(PosNormalVertex_Aligned) * vert_count);
     }
-    vertex_ssbo_ = SDL_CreateGPUBuffer(Device, &ssbo_info);
-    if (!vertex_ssbo_) {
+    grassblade_vertices_ = SDL_CreateGPUBuffer(Device, &ssbo_info);
+    if (!grassblade_vertices_) {
       LOG_ERROR("couldn't create vertices ssbo");
       return false;
     }
   }
-  if (!EnginePtr->UploadToBuffer(index_buffer_, indices.data(), index_count_)) {
+  if (!EnginePtr->UploadToBuffer(
+        grassblade_indices_, indices.data(), grassblade_index_count_)) {
     LOG_ERROR("Couldn't upload index buffer data");
     return false;
   }
-  if (!EnginePtr->UploadToBuffer(vertex_ssbo_, vertices.data(), vert_count)) {
+  if (!EnginePtr->UploadToBuffer(
+        grassblade_vertices_, vertices.data(), vert_count)) {
     LOG_ERROR("Couldn't upload vertices ssbo data");
+    return false;
+  }
+  if (!EnginePtr->UploadToBuffer(chunk_indices_, chunk_idx.data(), 6)) {
+    LOG_ERROR("Couldn't upload index buffer data");
     return false;
   }
   return true;
@@ -478,17 +632,28 @@ GrassProgram::DrawGui()
     ImGui::DockSpaceOverViewport(0, ImGui::GetMainViewport());
   }
 
+  if (ImGui::Begin("Stats")) {
+    auto& p = grass_gen_params_;
+    ImGui::Text("Total grassblades: %d",
+                p.grass_per_chunk * p.grass_per_chunk * p.terrain_width *
+                  p.terrain_width);
+    ImGui::Text("Total chunks: %d", p.terrain_width * p.terrain_width);
+    ImGui::End();
+  }
   if (ImGui::Begin("Settings")) {
-    ImGui::Text("Window Width: %d", window_w_);
-    ImGui::Text("Window Height: %d", window_h_);
-    ImGui::Text("Rendertarget Width: %d", rendertarget_w_);
-    ImGui::Text("Rendertarget Height: %d", rendertarget_h_);
-    ImGui::Text("Aspect Ratio: %f",
-                (f32)rendertarget_w_ / (f32)rendertarget_h_);
+    if (ImGui::TreeNode("Viewport")) {
+      ImGui::Text("Window Width: %d", window_w_);
+      ImGui::Text("Window Height: %d", window_h_);
+      ImGui::Text("Rendertarget Width: %d", rendertarget_w_);
+      ImGui::Text("Rendertarget Height: %d", rendertarget_h_);
+      ImGui::Text("Aspect Ratio: %f",
+                  (f32)rendertarget_w_ / (f32)rendertarget_h_);
+      ImGui::TreePop();
+    }
     if (ImGui::TreeNode("Camera")) {
       ImGui::Text("Position");
       if (ImGui::SliderFloat3(
-            "Translation", (f32*)&camera_.Position, -50.f, 50.f)) {
+            "Translation", (f32*)&camera_.Position, -150.f, 150.f)) {
         camera_.Moved = true;
       }
       ImGui::Text("Rotation");
@@ -507,10 +672,20 @@ GrassProgram::DrawGui()
       ImGui::ColorEdit3("Specular:", (f32*)&sunlight_.specular);
       ImGui::TreePop();
     }
+    if (ImGui::TreeNode("Terrain")) {
+      ImGui::Checkbox("Draw terrain", &draw_terrain_);
+      ImGui::Checkbox("Draw grass", &draw_grass_);
+      ImGui::Checkbox("Highlight chunks",
+                      (bool*)&terrain_params_.highlight_chunks);
+      ImGui::SliderInt("World size", &terrain_params_.world_size, 1, 256);
+      ImGui::SliderFloat(
+        "Heightmap scale", &terrain_params_.heightmap_scale, 1.f, 128.f);
+      ImGui::TreePop();
+    }
     if (ImGui::TreeNode("Grass Generation")) {
       static auto tmp_params = grass_gen_params_; // copy to apply all at once
       ImGui::ColorEdit3("Base Color:", (f32*)&tmp_params.base_color);
-      ImGui::SliderInt("Chunk count", (i32*)&tmp_params.chunk_count, 1, 15);
+      ImGui::SliderInt("Chunk count", (i32*)&tmp_params.terrain_width, 4, 64);
       ImGui::SliderInt(
         "Grassblades per chunk", (i32*)&tmp_params.grass_per_chunk, 1.f, 32.f);
       ImGui::SliderFloat("Density", (f32*)&tmp_params.density, 1.f, 20.f);
@@ -530,6 +705,7 @@ GrassProgram::DrawGui()
 
       if (ImGui::Button("Generate")) {
         grass_gen_params_ = tmp_params;
+        terrain_params_.terrain_width = grass_gen_params_.terrain_width;
         regenerate_grass_ = true;
       }
 

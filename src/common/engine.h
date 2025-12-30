@@ -61,7 +61,7 @@ Engine::UploadToBuffer(SDL_GPUBuffer* buf, const T* data, const u32 count)
     return false;
   }
 
-  const u32 transfer_size = sizeof(T)*count;
+  const u32 transfer_size = sizeof(T) * count;
 
   TransferBufferWrapper tr_wrapped{ Device, transfer_size };
   auto* tr_buf = tr_wrapped.Get();
