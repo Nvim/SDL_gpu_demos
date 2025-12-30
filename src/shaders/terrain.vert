@@ -81,8 +81,8 @@ void main()
 
     gl_Position = camera.viewproj * world_pos;
     if (highlight_chunks != 0) {
-        // OutFragColor = vec3(vert.position.x+.5f, .2f, vert.position.z+.5f);
-        OutFragColor = vec3(uv.x, .2f, uv.y);
+        OutFragColor = vec3(vert.position.x+.5f, .2f, vert.position.z+.5f);
+        // OutFragColor = vec3(uv.x, .2f, uv.y);
         return;
     }
     OutFragColor = base_color * (height * .75f + .25f);

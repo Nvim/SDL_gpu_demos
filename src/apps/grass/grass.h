@@ -65,11 +65,18 @@ private:
   bool CreateComputePipeline();
   bool UploadVertexData();
   bool GenerateGrassblades();
+  void DrawGrass(SDL_GPURenderPass* pass,
+                 SDL_GPUCommandBuffer* cmdbuf,
+                 CameraBinding& camera);
+  void DrawTerrain(SDL_GPURenderPass* pass,
+                   SDL_GPUCommandBuffer* cmdbuf,
+                   CameraBinding& camera);
   ImDrawData* DrawGui();
 
 private:
   bool quit_{ false };
   bool draw_terrain_{ true };
+  bool draw_grass_{ true };
   i32 window_w_;
   i32 window_h_;
   i32 rendertarget_w_;

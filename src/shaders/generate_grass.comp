@@ -5,7 +5,7 @@
 #include "terrain_chunk_instance.glsl"
 #include "grass_gen.h"
 
-layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+layout(local_size_x = 32, local_size_y = 32, local_size_z = 1) in;
 
 layout(std140, set = 2, binding = 0) uniform uSettings {
     GrassGenerationParams params;
@@ -31,6 +31,10 @@ float rand(float x) {
 const float PI = 3.14159265358979323846;
 
 void main() {
+    if (gl_LocalInvocationID.x >= params.grass_per_chunk ||
+            gl_LocalInvocationID.y >= params.grass_per_chunk) {
+        return;
+    }
 
     // Each workgroup processes a single terrain chunk for now
     uint chunk_idx = gl_WorkGroupID.x + (gl_WorkGroupID.y * params.terrain_width);
@@ -40,8 +44,10 @@ void main() {
         Chunks[chunk_idx].world_translation = ivec2(chunk_x, chunk_z);
     }
 
-    uint idx = gl_GlobalInvocationID.x +
-        (gl_GlobalInvocationID.y * params.grass_per_chunk * params.terrain_width);
+    uvec3 wg_size = uvec3(params.grass_per_chunk, params.grass_per_chunk, 1);
+    uvec3 global_id = gl_WorkGroupID * wg_size + gl_LocalInvocationID;
+    uint idx = global_id.x +
+            (global_id.y * params.grass_per_chunk * params.terrain_width);
     Grassblades[idx].rotation = FLAG_ON(GRASS_ROTATE) ? rand(cos(idx) * sin(time)) * PI : 0.f;
 
     float off_x = 0.f;
@@ -54,5 +60,4 @@ void main() {
     Grassblades[idx].chunk_index = chunk_idx;
     Grassblades[idx].relative_translation.x = (gl_LocalInvocationID.x / float(params.grass_per_chunk)) - .5f;
     Grassblades[idx].relative_translation.y = (gl_LocalInvocationID.y / float(params.grass_per_chunk)) - .5f;
-
 }
