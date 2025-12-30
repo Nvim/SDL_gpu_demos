@@ -91,10 +91,6 @@ GrassProgram::Init()
     LOG_CRITICAL("Couldn't load skybox");
     return false;
   }
-  if (!grid_.IsLoaded()) {
-    LOG_CRITICAL("Couldn't load grid");
-    return false;
-  }
   if (!CreateRenderTargets()) {
     LOG_CRITICAL("Couldn't create render targets");
     return false;
@@ -209,9 +205,13 @@ GrassProgram::GenerateGrassblades()
   }
 
   { // Dispatch compute
-    SDL_GPUStorageBufferReadWriteBinding bindings[2] = {
-      { grassblade_instances_, false }, { chunk_instances_, false }
-    };
+    SDL_GPUStorageBufferReadWriteBinding bindings[2];
+    {
+      bindings[0].buffer = grassblade_instances_;
+      bindings[0].cycle = false;
+      bindings[1].buffer = chunk_instances_;
+      bindings[1].cycle = false;
+    }
 
     SDL_GPUCommandBuffer* cmd_buf = SDL_AcquireGPUCommandBuffer(Device);
     if (cmd_buf == NULL) {

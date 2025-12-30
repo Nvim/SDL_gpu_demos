@@ -84,7 +84,6 @@ private:
   u32 grassblade_index_count_{ 0 };
   Camera camera_{};
   Skybox skybox_{ SKYBOX_PATH, EnginePtr, TARGET_FORMAT };
-  Grid grid_{ EnginePtr, TARGET_FORMAT };
   DirLightBinding sunlight_;
   TerrainBinding terrain_params_{
     .terrain_width = 16,
