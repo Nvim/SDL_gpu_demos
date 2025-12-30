@@ -20,6 +20,7 @@ struct TerrainBinding
   i32 world_size;
   f32 heightmap_scale;
   i32 highlight_chunks;
+  glm::vec4 terrain_color;
 };
 
 class GrassProgram : public Program
@@ -90,6 +91,7 @@ private:
     .world_size = 32,
     .heightmap_scale = 4.f,
     .highlight_chunks = 0,
+    .terrain_color = { .04f, .12f, .01f, 0.f },
   };
   GrassGenerationParams grass_gen_params_{ .base_color =
                                              glm::vec3{ .19f, .44f, .12f },

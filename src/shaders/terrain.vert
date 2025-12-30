@@ -26,6 +26,7 @@ layout(std140, set = 1, binding = 1) uniform uTerrain {
     int world_size;
     float heightmap_scale; // different scale for Y
     int highlight_chunks;
+    vec4 terrain_color;
 };
 
 mat4 modelFromWorldPos(in vec3 worldPos) {
@@ -51,8 +52,6 @@ const Vertex top_right = Vertex(vec3(.5f, 0.f, .5f), 0.f);
 const Vertex Quad[4] = Vertex[4](
         bot_left, bot_right, top_left, top_right
     );
-
-const vec3 base_color = vec3(.19f, .44f, .12f);
 
 void main()
 {
@@ -81,9 +80,9 @@ void main()
 
     gl_Position = camera.viewproj * world_pos;
     if (highlight_chunks != 0) {
-        OutFragColor = vec3(vert.position.x+.5f, .2f, vert.position.z+.5f);
+        OutFragColor = vec3(vert.position.x + .5f, .2f, vert.position.z + .5f);
         // OutFragColor = vec3(uv.x, .2f, uv.y);
         return;
     }
-    OutFragColor = base_color * (height * .75f + .25f);
+    OutFragColor = terrain_color.xyz * (height * .75f + .25f);
 }

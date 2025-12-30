@@ -12,11 +12,10 @@ struct Vertex {
     float pad_1;
 };
 
-layout(location = 0) out vec3 OutFragColor;
-layout(location = 1) out vec3 OutViewPos;
-layout(location = 2) out vec3 OutFragPos;
-layout(location = 3) out vec3 OutNormal;
-layout(location = 4) out float OutLocalHeight;
+layout(location = 0) out vec3 OutViewPos;
+layout(location = 1) out vec3 OutFragPos;
+layout(location = 2) out vec3 OutNormal;
+layout(location = 3) out float OutLocalHeight;
 
 layout(set = 0, binding = 0) uniform sampler2D TexNoise;
 
@@ -99,7 +98,6 @@ void main()
     mat_model *= rotateY(grass_instance.rotation);
     vec4 world_pos = mat_model * vec4(vert.position, 1.0);
 
-    OutFragColor = base_color;
     OutFragPos = world_pos.xyz;
     OutViewPos = camera.world_pos.xyz;
     OutNormal = mat3(transpose(inverse(mat_model))) * vert.normal;

@@ -1,11 +1,10 @@
 #version 450 core
 
 layout(location = 0) out vec4 OutFragColor;
-layout(location = 0) in vec3 inColor;
-layout(location = 1) in vec3 inViewPos;
-layout(location = 2) in vec3 inFragPos;
-layout(location = 3) in vec3 inNormal;
-layout(location = 4) in float inLocalHeight;
+layout(location = 0) in vec3 inViewPos;
+layout(location = 1) in vec3 inFragPos;
+layout(location = 2) in vec3 inNormal;
+layout(location = 3) in float inLocalHeight;
 
 struct DirLight {
     vec3 direction;
@@ -21,6 +20,10 @@ layout(std140, set = 3, binding = 0) uniform uDirLight {
     DirLight sun;
 };
 
+layout(std140, set = 3, binding = 1) uniform uColor {
+    vec3 grass_color;
+};
+
 void main()
 {
     vec3 normal = normalize(inNormal);
@@ -30,7 +33,7 @@ void main()
     float y = inLocalHeight / den; // [0,1] -> [0,0.5]
     float color_fact = y - halfden; // [0,0.5] -> [-0.25,0.25]
 
-    OutFragColor = vec4(inColor + color_fact, 1.0);
+    OutFragColor = vec4(grass_color + color_fact, 1.0);
 
     // vec3 ambient = sun.ambient * color;
     //

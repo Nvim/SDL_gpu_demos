@@ -345,6 +345,8 @@ GrassProgram::DrawGrass(SDL_GPURenderPass* pass,
     cmdbuf, 1, &terrain_params_, sizeof(terrain_params_));
 
   SDL_PushGPUFragmentUniformData(cmdbuf, 0, &sunlight_, sizeof(sunlight_));
+  SDL_PushGPUFragmentUniformData(
+    cmdbuf, 1, &grass_gen_params_.base_color, sizeof(glm::vec3));
 
   SDL_BindGPUIndexBuffer(pass, &grass_idx_bind, SDL_GPU_INDEXELEMENTSIZE_32BIT);
 
@@ -481,7 +483,7 @@ GrassProgram::CreateGraphicsPipelines()
       LOG_ERROR("Couldn't load vertex shader at path {}", GRASS_VS_PATH);
       return false;
     }
-    auto frag = LoadShader(GRASS_FS_PATH, Device, 0, 1, 0, 0);
+    auto frag = LoadShader(GRASS_FS_PATH, Device, 0, 2, 0, 0);
     if (frag == nullptr) {
       LOG_ERROR("Couldn't load fragment shader at path {}", GRASS_FS_PATH);
       return false;
@@ -673,13 +675,13 @@ GrassProgram::DrawGui()
       ImGui::TreePop();
     }
     if (ImGui::TreeNode("Terrain")) {
+      auto& tp = terrain_params_;
       ImGui::Checkbox("Draw terrain", &draw_terrain_);
       ImGui::Checkbox("Draw grass", &draw_grass_);
-      ImGui::Checkbox("Highlight chunks",
-                      (bool*)&terrain_params_.highlight_chunks);
-      ImGui::SliderInt("World size", &terrain_params_.world_size, 1, 256);
-      ImGui::SliderFloat(
-        "Heightmap scale", &terrain_params_.heightmap_scale, 1.f, 128.f);
+      ImGui::Checkbox("Highlight chunks", (bool*)&tp.highlight_chunks);
+      ImGui::SliderInt("World size", &tp.world_size, 1, 256);
+      ImGui::SliderFloat("Heightmap scale", &tp.heightmap_scale, 1.f, 128.f);
+      ImGui::ColorEdit3("Color:", (f32*)&tp.terrain_color);
       ImGui::TreePop();
     }
     if (ImGui::TreeNode("Grass Generation")) {
