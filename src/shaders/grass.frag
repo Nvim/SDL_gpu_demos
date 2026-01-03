@@ -1,5 +1,9 @@
 #version 450 core
 
+#extension GL_GOOGLE_include_directive : require
+#include "fog_settings.h"
+#include "fog.glsl"
+
 layout(location = 0) out vec4 OutFragColor;
 layout(location = 0) in vec3 inViewPos;
 layout(location = 1) in vec3 inFragPos;
@@ -24,6 +28,10 @@ layout(std140, set = 3, binding = 1) uniform uColor {
     vec3 grass_color;
 };
 
+layout(std140, set = 3, binding = 2) uniform uFog {
+    FogSettings fog;
+};
+
 void main()
 {
     vec3 normal = normalize(inNormal);
@@ -33,7 +41,11 @@ void main()
     float y = inLocalHeight / den; // [0,1] -> [0,0.5]
     float color_fact = y - halfden; // [0,0.5] -> [-0.25,0.25]
 
-    OutFragColor = vec4(grass_color + color_fact, 1.0);
+    vec3 color = grass_color + color_fact;
+
+    float fog_fact = 1.f - getFogFactor(inFragPos, inViewPos, fog);
+    color = mix(color, fog.fog_color, fog_fact);
+    OutFragColor = vec4(color, 1.f);
 
     // vec3 ambient = sun.ambient * color;
     //

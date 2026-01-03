@@ -347,6 +347,8 @@ GrassProgram::DrawGrass(SDL_GPURenderPass* pass,
   SDL_PushGPUFragmentUniformData(cmdbuf, 0, &sunlight_, sizeof(sunlight_));
   SDL_PushGPUFragmentUniformData(
     cmdbuf, 1, &grass_gen_params_.base_color, sizeof(glm::vec3));
+  SDL_PushGPUFragmentUniformData(
+    cmdbuf, 2, &fog_settings, sizeof(fog_settings));
 
   SDL_BindGPUIndexBuffer(pass, &grass_idx_bind, SDL_GPU_INDEXELEMENTSIZE_32BIT);
 
@@ -372,6 +374,8 @@ GrassProgram::DrawTerrain(SDL_GPURenderPass* pass,
   SDL_PushGPUVertexUniformData(cmdbuf, 0, &camera, sizeof(camera));
   SDL_PushGPUVertexUniformData(
     cmdbuf, 1, &terrain_params_, sizeof(terrain_params_));
+  SDL_PushGPUFragmentUniformData(
+    cmdbuf, 0, &fog_settings, sizeof(fog_settings));
 
   SDL_BindGPUIndexBuffer(pass, &chunk_idx_bind, SDL_GPU_INDEXELEMENTSIZE_32BIT);
 
@@ -483,7 +487,7 @@ GrassProgram::CreateGraphicsPipelines()
       LOG_ERROR("Couldn't load vertex shader at path {}", GRASS_VS_PATH);
       return false;
     }
-    auto frag = LoadShader(GRASS_FS_PATH, Device, 0, 2, 0, 0);
+    auto frag = LoadShader(GRASS_FS_PATH, Device, 0, 3, 0, 0);
     if (frag == nullptr) {
       LOG_ERROR("Couldn't load fragment shader at path {}", GRASS_FS_PATH);
       return false;
@@ -508,7 +512,7 @@ GrassProgram::CreateGraphicsPipelines()
       LOG_ERROR("Couldn't load vertex shader at path {}", TERRAIN_VS_PATH);
       return false;
     }
-    auto frag = LoadShader(TERRAIN_FS_PATH, Device, 0, 0, 0, 0);
+    auto frag = LoadShader(TERRAIN_FS_PATH, Device, 0, 1, 0, 0);
     if (frag == nullptr) {
       LOG_ERROR("Couldn't load fragment shader at path {}", TERRAIN_FS_PATH);
       return false;
@@ -618,9 +622,16 @@ GrassProgram::UploadVertexData()
   return true;
 }
 
-static constexpr Flag flags[] = {
+static constexpr Flag grass_flags[] = {
   { "Offset positions", GRASS_OFFSET_POS },
   { "Random rotation", GRASS_ROTATE },
+};
+
+static constexpr Flag fog_flags[] = {
+  { "Off", FOG_NONE },
+  { "Linear", FOG_LINEAR },
+  { "Exponential", FOG_EXP },
+  { "Exponential Squared", FOG_EXP_SQ },
 };
 
 ImDrawData*
@@ -692,7 +703,7 @@ GrassProgram::DrawGui()
         "Grassblades per chunk", (i32*)&tmp_params.grass_per_chunk, 1.f, 32.f);
       ImGui::SliderFloat("Density", (f32*)&tmp_params.density, 1.f, 20.f);
 
-      for (const Flag& flag : flags) {
+      for (const Flag& flag : grass_flags) {
         bool flag_set = (tmp_params.flags & flag.flag_value) != 0;
         if (ImGui::Checkbox(flag.label, &flag_set)) {
           if (flag_set) {
@@ -716,6 +727,23 @@ GrassProgram::DrawGui()
         tmp_params = grass_gen_params_;
       }
 
+      ImGui::TreePop();
+    }
+    if (ImGui::TreeNode("Fog")) {
+      ImGui::ColorEdit3("Color", (f32*)&fog_settings.fog_color);
+      ImGui::SliderFloat("Density", &fog_settings.fog_density, 0.f, 2.f);
+      ImGui::SliderFloat("Max Distance", &fog_settings.fog_end, 10.f, 100.f);
+      ImGui::SliderFloat("Begin Distance", &fog_settings.fog_start, 1.f, 100.f);
+      for (const Flag& flag : fog_flags) {
+        bool flag_set = (fog_settings.fog_type & flag.flag_value) != 0;
+        if (ImGui::Checkbox(flag.label, &flag_set)) {
+          if (flag_set) {
+            fog_settings.fog_type = flag.flag_value;
+          } else {
+            // fog_settings.fog_type &= ~flag.flag_value;
+          }
+        }
+      }
       ImGui::TreePop();
     }
     ImGui::End();

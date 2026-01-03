@@ -1,4 +1,5 @@
 #ifndef GRASS_GEN_H
+#define GRASS_GEN_H
 
 // clang-format off
 #define GRASS_ROTATE       (0x01 << 0x00)

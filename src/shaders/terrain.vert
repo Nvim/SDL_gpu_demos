@@ -9,7 +9,9 @@ struct Vertex {
     float pad_0;
 };
 
-layout(location = 0) out vec3 OutFragColor;
+layout(location = 0) out vec3 OutViewPos;
+layout(location = 1) out vec3 OutFragPos;
+layout(location = 2) out vec3 OutFragColor;
 
 layout(set = 0, binding = 0) uniform sampler2D TexNoise;
 
@@ -78,6 +80,8 @@ void main()
     float height = texture(TexNoise, uv).r;
     world_pos.y = (height - .5f) * heightmap_scale;
 
+    OutViewPos = camera.world_pos.xyz;
+    OutFragPos = world_pos.xyz;
     gl_Position = camera.viewproj * world_pos;
     if (highlight_chunks != 0) {
         OutFragColor = vec3(vert.position.x + .5f, .2f, vert.position.z + .5f);

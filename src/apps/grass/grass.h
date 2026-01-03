@@ -4,6 +4,7 @@
 #include "common/program.h"
 #include "common/skybox.h"
 #include "common/types.h"
+#include "shaders/fog_settings.h"
 #include "shaders/grass_gen.h"
 
 #include <SDL3/SDL_gpu.h>
@@ -36,7 +37,7 @@ class GrassProgram : public Program
   static constexpr const char* TERRAIN_VS_PATH =
     "resources/shaders/compiled/terrain.vert.spv";
   static constexpr const char* TERRAIN_FS_PATH =
-    "resources/shaders/compiled/color.frag.spv";
+    "resources/shaders/compiled/terrain.frag.spv";
   static constexpr const char* COMP_PATH =
     "resources/shaders/compiled/generate_grass.comp.spv";
   static constexpr SDL_GPUTextureFormat TARGET_FORMAT =
@@ -101,6 +102,13 @@ private:
                                            .grass_per_chunk = 16,
                                            .offset_cap = .2f,
                                            .density = 12.f };
+  FogSettings fog_settings{
+    .fog_color = glm::vec3{ 0.714, 0.82, 0.871 },
+    .fog_type = FOG_EXP_SQ,
+    .fog_density = .75f,
+    .fog_end = 100.f,
+    .fog_start = 18.f,
+  };
   bool regenerate_grass_{ false };
 
   // GPU Resources:

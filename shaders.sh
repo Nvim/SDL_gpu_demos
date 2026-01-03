@@ -22,6 +22,7 @@ if [[ $# -eq 1 && -n $1 ]]; then
       "grid.vert"
       "grass.vert"
       "terrain.vert"
+      "terrain.frag"
       "grid.frag"
       "grass.frag"
       "generate_grass.comp"
