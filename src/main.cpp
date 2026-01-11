@@ -1,11 +1,14 @@
+#include <cstdio>
+#include <cstring>
 #include <pch.h>
 
 #include "common/engine.h"
+#include "common/program.h"
 
 #include <SDL3/SDL_video.h>
 
 #include <apps/grass/grass.h>
-// #include <apps/pbr/pbr_app.h>
+#include <apps/pbr/pbr_app.h>
 #include <common/logger.h>
 
 namespace {
@@ -14,8 +17,13 @@ constexpr i32 SCREEN_HEIGHT = 900;
 }
 
 int
-main()
+main(int argc, char** argv)
 {
+  if (argc != 2) {
+    std::fprintf(stderr, "usage: %s [app name]\n", argv[0]);
+    return 1;
+  }
+
   Logger::Init();
   LOG_INFO("Starting..");
   if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD)) {
@@ -57,31 +65,41 @@ main()
       LOG_CRITICAL("Couldn't initialize engine");
       return -1;
     }
-    grass::GrassProgram app{
-      Device, Window, &engine, SCREEN_WIDTH, SCREEN_HEIGHT
-    };
-    // CubeProgram app{ Device, Window, &engine, 1600, 1200 };
 
-    if (!app.Init()) {
+    Program* app{nullptr};
+    if (strcmp(argv[1], "grass") == 0) {
+      app = new grass::GrassProgram{
+        Device, Window, &engine, SCREEN_WIDTH, SCREEN_HEIGHT
+      };
+    } else if (strcmp(argv[1], "pbr") == 0) {
+      app =
+        new CubeProgram{ Device, Window, &engine, SCREEN_WIDTH, SCREEN_HEIGHT };
+    } else {
+      LOG_CRITICAL("{}: invalid application name", argv[1]);
+      return 1;
+    }
+
+    if (!app->Init()) {
       LOG_CRITICAL("Couldn't init app.");
     } else {
       LOG_INFO("Entering main loop");
-      while (!app.ShouldQuit()) {
-        if (!app.Poll()) {
+      while (!app->ShouldQuit()) {
+        if (!app->Poll()) {
           LOG_CRITICAL("App failed to Poll");
           break;
         }
-        app.UpdateTime();
-        if (app.ShouldQuit()) {
+        app->UpdateTime();
+        if (app->ShouldQuit()) {
           LOG_INFO("App recieved quit event. exiting..");
           break;
         }
-        if (!app.Draw()) {
+        if (!app->Draw()) {
           LOG_CRITICAL("App failed to draw");
           break;
         };
       }
     }
+    delete app;
   }
 
   LOG_INFO("Releasing window and gpu context");

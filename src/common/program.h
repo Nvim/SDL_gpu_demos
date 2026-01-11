@@ -23,7 +23,7 @@ public:
     : Device{ device }
     , Window{ window }
     , EnginePtr{ engine } {};
-  ~Program() {};
+  virtual ~Program() {};
 
   virtual bool Init() = 0;
   virtual bool Poll() = 0;
