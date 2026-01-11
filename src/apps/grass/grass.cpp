@@ -64,6 +64,7 @@ GrassProgram::~GrassProgram()
   LOG_DEBUG("Destroying GrassProgram");
 
   RELEASE_IF(grass_pipeline_, SDL_ReleaseGPUGraphicsPipeline);
+  RELEASE_IF(generate_grass_pipeline_, SDL_ReleaseGPUComputePipeline);
   RELEASE_IF(grassblade_indices_, SDL_ReleaseGPUBuffer);
   RELEASE_IF(grassblade_vertices_, SDL_ReleaseGPUBuffer);
   RELEASE_IF(grassblade_instances_, SDL_ReleaseGPUBuffer);
@@ -72,6 +73,8 @@ GrassProgram::~GrassProgram()
   RELEASE_IF(chunk_indices_, SDL_ReleaseGPUBuffer);
   RELEASE_IF(chunk_instances_, SDL_ReleaseGPUBuffer);
 
+  RELEASE_IF(depth_target_, SDL_ReleaseGPUTexture);
+  RELEASE_IF(scene_target_, SDL_ReleaseGPUTexture);
   RELEASE_IF(noise_texture_, SDL_ReleaseGPUTexture);
   SDL_WaitForGPUIdle(Device);
   ImGui_ImplSDL3_Shutdown();
@@ -184,6 +187,7 @@ GrassProgram::GenerateGrassblades()
           LOG_ERROR("Couldn't create storage buffer: {}", GETERR);
           return false;
         }
+        SDL_ReleaseGPUBuffer(Device, *buf);
         *buf = ret;
         prev_size = new_size;
       } else {
