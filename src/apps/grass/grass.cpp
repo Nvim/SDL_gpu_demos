@@ -408,6 +408,7 @@ GrassProgram::InitGui()
   io.ConfigFlags |=
     ImGuiConfigFlags_NavEnableGamepad;              // Enable Gamepad Controls
   io.ConfigFlags |= ImGuiConfigFlags_DockingEnable; // Enable Docking
+  io.IniFilename = "imgui/grass.ini";
 
   // Setup Dear ImGui style
   ImGui::StyleColorsDark();

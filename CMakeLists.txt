@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.30)
 
 project(sdlcube LANGUAGES CXX C)
 
-option(ENABLE_ASAN "Enable AddressSanitizer instrumentation" OFF)
+option(ENABLE_ASAN "Enable ASan" OFF)
 option(BUILD_SDL "Build a vendored version of SDL3" OFF)
 
 # CPP Setup

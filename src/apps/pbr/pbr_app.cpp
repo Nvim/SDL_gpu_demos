@@ -23,8 +23,8 @@ CubeProgram::CubeProgram(SDL_GPUDevice* device,
                          int w,
                          int h)
   : Program{ device, window, engine }
-  , vp_width_{ w }
-  , vp_height_{ h }
+  , vp_width_{ static_cast<i32>(w * (3 / 4.f)) }
+  , vp_height_{ static_cast<i32>(h * (3 / 4.f)) }
 {
   {
     scene_color_target_info_.clear_color = { 0.1f, 0.1f, 0.1f, 1.0f };
@@ -529,6 +529,8 @@ CubeProgram::InitGui()
   io.ConfigFlags |=
     ImGuiConfigFlags_NavEnableGamepad;              // Enable Gamepad Controls
   io.ConfigFlags |= ImGuiConfigFlags_DockingEnable; // Enable Docking
+
+  io.IniFilename = "imgui/pbr.ini";
 
   // Setup Dear ImGui style
   ImGui::StyleColorsDark();

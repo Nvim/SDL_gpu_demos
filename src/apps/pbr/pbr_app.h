@@ -109,8 +109,8 @@ private:
 private:
   // Internals:
   bool quit{ false };
-  const int vp_width_{ 640 };
-  const int vp_height_{ 480 };
+  i32 vp_width_{ 640 };
+  i32 vp_height_{ 480 };
   Transform global_transform_;
   Camera camera_{ glm::radians(60.0f),
                   vp_width_ / (f32)vp_height_,
