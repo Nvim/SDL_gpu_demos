@@ -41,6 +41,9 @@ Skybox::~Skybox()
   LOG_TRACE("Destroying Skybox");
   auto* Device = engine_->Device;
   RELEASE_IF(Pipeline, SDL_ReleaseGPUGraphicsPipeline);
+  RELEASE_IF(CubemapSampler, SDL_ReleaseGPUSampler);
+  RELEASE_IF(Buffers.IndexBuffer, SDL_ReleaseGPUBuffer);
+  RELEASE_IF(Buffers.VertexBuffer, SDL_ReleaseGPUBuffer);
 }
 
 bool

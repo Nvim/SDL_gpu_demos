@@ -302,6 +302,14 @@ ProjectionCubemapLoader::ProjectionCubemapLoader(SDL_GPUDevice* device)
   init_ = true;
 }
 
+ProjectionCubemapLoader::~ProjectionCubemapLoader()
+{
+  auto* Device = this->device_;
+  RELEASE_IF(VertexBuffer, SDL_ReleaseGPUBuffer);
+  RELEASE_IF(IndexBuffer, SDL_ReleaseGPUBuffer);
+  RELEASE_IF(Pipeline, SDL_ReleaseGPUGraphicsPipeline);
+}
+
 UniquePtr<Cubemap>
 ProjectionCubemapLoader::Load(std::filesystem::path path,
                               CubeMapUsage usage) const

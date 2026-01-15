@@ -69,7 +69,7 @@ public:
   explicit ProjectionCubemapLoader(SDL_GPUDevice* device);
   UniquePtr<Cubemap> Load(std::filesystem::path path,
                           CubeMapUsage usage) const override;
-  ~ProjectionCubemapLoader() override = default;
+  ~ProjectionCubemapLoader() override;
 
 private:
   bool CreatePipeline();

@@ -10,6 +10,7 @@ ComputePipelineBuilder::ComputePipelineBuilder()
 {
   info_.entrypoint = "main";
   info_.format = SDL_GPU_SHADERFORMAT_SPIRV;
+  info_.num_samplers = 0;
 }
 
 ComputePipelineBuilder::~ComputePipelineBuilder()

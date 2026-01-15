@@ -118,6 +118,7 @@ GLTFLoader::Release()
   auto Device = engine_->Device;
   RELEASE_IF(transparent_pipeline_, SDL_ReleaseGPUGraphicsPipeline);
   RELEASE_IF(opaque_pipeline_, SDL_ReleaseGPUGraphicsPipeline);
+  RELEASE_IF(default_sampler_, SDL_ReleaseGPUSampler)
 
   LOG_DEBUG("Released GLTFLoader resources");
 }

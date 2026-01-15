@@ -66,7 +66,7 @@ main(int argc, char** argv)
       return -1;
     }
 
-    Program* app{nullptr};
+    Program* app{ nullptr };
     if (strcmp(argv[1], "grass") == 0) {
       app = new grass::GrassProgram{
         Device, Window, &engine, SCREEN_WIDTH, SCREEN_HEIGHT

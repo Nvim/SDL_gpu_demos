@@ -393,8 +393,7 @@ CubeProgram::CreateSceneRenderTargets()
     info.layer_count_or_depth = 1;
     info.num_levels = 1;
     info.sample_count = SDL_GPU_SAMPLECOUNT_1;
-    info.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER |
-                 SDL_GPU_TEXTUREUSAGE_COLOR_TARGET |
+    info.usage = SDL_GPU_TEXTUREUSAGE_COLOR_TARGET |
                  SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_READ;
     hdr_color_target_ = SDL_CreateGPUTexture(Device, &info);
   }
