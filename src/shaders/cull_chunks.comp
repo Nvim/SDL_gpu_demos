@@ -1,0 +1,33 @@
+#version 450
+
+#extension GL_GOOGLE_include_directive : require
+#include "grass_instance.glsl"
+#include "terrain_chunk_instance.glsl"
+#include "grass_gen.h"
+
+layout(local_size_x = 32, local_size_y = 32, local_size_z = 1) in;
+
+layout(std140, set = 2, binding = 0) uniform uSettings {
+    GrassGenerationParams params;
+};
+
+layout(set = 0, binding = 0) readonly buffer ChunkInstances {
+    ChunkInstance Chunks[];
+};
+
+layout(set = 1, binding = 0) writeonly buffer VisibleChunks {
+    uint VisibleChunkIndices[];
+};
+
+void main() {
+    if (gl_LocalInvocationID.x >= params.grass_per_chunk ||
+            gl_LocalInvocationID.y >= params.grass_per_chunk) {
+        return;
+    }
+
+    // Each workgroup processes a single terrain chunk for now
+    uint chunk_idx = gl_WorkGroupID.x + (gl_WorkGroupID.y * params.terrain_width);
+    if (gl_LocalInvocationIndex == 0) {
+        VisibleChunkIndices[chunk_idx] = chunk_idx;
+    }
+}

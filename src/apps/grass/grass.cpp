@@ -65,6 +65,7 @@ GrassProgram::~GrassProgram()
 
   RELEASE_IF(grass_pipeline_, SDL_ReleaseGPUGraphicsPipeline);
   RELEASE_IF(generate_grass_pipeline_, SDL_ReleaseGPUComputePipeline);
+  RELEASE_IF(cull_chunks_pipeline_, SDL_ReleaseGPUComputePipeline);
   RELEASE_IF(grassblade_indices_, SDL_ReleaseGPUBuffer);
   RELEASE_IF(grassblade_vertices_, SDL_ReleaseGPUBuffer);
   RELEASE_IF(grassblade_instances_, SDL_ReleaseGPUBuffer);
@@ -72,6 +73,7 @@ GrassProgram::~GrassProgram()
   RELEASE_IF(terrain_pipeline_, SDL_ReleaseGPUGraphicsPipeline);
   RELEASE_IF(chunk_indices_, SDL_ReleaseGPUBuffer);
   RELEASE_IF(chunk_instances_, SDL_ReleaseGPUBuffer);
+  RELEASE_IF(visible_chunks_, SDL_ReleaseGPUBuffer);
 
   RELEASE_IF(depth_target_, SDL_ReleaseGPUTexture);
   RELEASE_IF(scene_target_, SDL_ReleaseGPUTexture);
@@ -102,7 +104,7 @@ GrassProgram::Init()
     LOG_CRITICAL("Couldn't create graphics pipeline");
     return false;
   }
-  if (!CreateComputePipeline()) {
+  if (!CreateComputePipelines()) {
     LOG_CRITICAL("Couldn't create compute pipeline");
     return false;
   }
@@ -204,6 +206,12 @@ GrassProgram::GenerateGrassblades()
     }
     if (!resize_buffer(&chunk_instances_, new_chunks_size, prev_chunks_size)) {
       LOG_ERROR("Couldn't resize chunks buffer");
+      return false;
+    }
+
+    // Also resize visible chunks buffer:
+    if (!resize_buffer(&visible_chunks_, new_chunks_size, prev_chunks_size)) {
+      LOG_ERROR("Couldn't resize visible chunks buffer");
       return false;
     }
   }
@@ -538,7 +546,7 @@ GrassProgram::CreateGraphicsPipelines()
 }
 
 bool
-GrassProgram::CreateComputePipeline()
+GrassProgram::CreateComputePipelines()
 {
   LOG_TRACE("CubeProgram::CreateComputePipeline");
 
@@ -554,9 +562,23 @@ GrassProgram::CreateComputePipeline()
                                .Build(Device);
 
   if (generate_grass_pipeline_ == nullptr) {
-    LOG_ERROR("Couldn't create compute pipeline: {}", GETERR);
+    LOG_ERROR("Couldn't create generate_grass pipeline: {}", GETERR);
     return false;
   }
+
+  cull_chunks_pipeline_ =
+    builder                              //
+      .SetReadOnlyStorageBufferCount(1)  // Read chunks
+      .SetReadWriteStorageBufferCount(1) // Write visible chunks
+      .SetUBOCount(1)
+      .SetShader(CULL_COMP_PATH)
+      .Build(Device);
+
+  if (cull_chunks_pipeline_ == nullptr) {
+    LOG_ERROR("Couldn't create cull_chunks pipeline: {}", GETERR);
+    return false;
+  }
+
   return true;
 }
 
