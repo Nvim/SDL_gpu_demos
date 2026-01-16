@@ -1,3 +1,6 @@
+#ifndef PBR_FLAGS_H
+#define PBR_FLAGS_H
+
 // clang-format off
 #define USE_DIFFUSE_TEX    (0x01 << 0x00)
 #define USE_VERTEX_COLOR   (0x01 << 0x01)
@@ -12,3 +15,5 @@
 #define USE_IBL_SPECULAR   (0x01 << 0x0A)
 #define USE_IBL_DIFFUSE    (0x01 << 0x0B)
 #define USE_POINTLIGHTS    (0x01 << 0x0C)
+
+#endif // !PBR_FLAGS_H

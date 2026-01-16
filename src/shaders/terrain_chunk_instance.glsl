@@ -6,4 +6,4 @@ struct ChunkInstance {
     ivec2 world_translation; 
 };
 
-#endif
+#endif // !CHUNK_INSTANCE_GLSL

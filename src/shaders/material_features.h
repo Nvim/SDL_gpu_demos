@@ -1,3 +1,6 @@
+#ifndef MATERIAL_FEATURES_H
+#define MATERIAL_FEATURES_H
+
 // clang-format off
 #define HAS_DIFFUSE_TEX    (0x01 << 0x00)
 #define HAS_NORMAL_TEX     (0x01 << 0x01)
@@ -7,3 +10,5 @@
 #define HAS_OCCLUSION_FACT (0x01 << 0x05)
 #define HAS_EMISSIVE_FACT  (0x01 << 0x06)
 #define HAS_EMISSIVE_TEX   (0x01 << 0x07)
+
+#endif // !MATERIAL_FEATURES_H

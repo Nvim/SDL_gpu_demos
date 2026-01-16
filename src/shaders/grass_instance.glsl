@@ -7,4 +7,4 @@ struct GrassInstance {
     vec2 relative_translation; // Position relative to chunk's center
 };
 
-#endif
+#endif // !GRASS_INSTANCE_GLSL
