@@ -69,6 +69,7 @@ private:
   bool CreateComputePipelines();
   bool UploadVertexData();
   bool GenerateGrassblades();
+  bool CullChunks(CameraBinding& camera);
   void DrawGrass(SDL_GPURenderPass* pass,
                  SDL_GPUCommandBuffer* cmdbuf,
                  CameraBinding& camera);

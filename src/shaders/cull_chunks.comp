@@ -4,30 +4,34 @@
 #include "grass_instance.glsl"
 #include "terrain_chunk_instance.glsl"
 #include "grass_gen.h"
+#include "camera_binding.glsl"
 
-layout(local_size_x = 32, local_size_y = 32, local_size_z = 1) in;
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 
 layout(std140, set = 2, binding = 0) uniform uSettings {
     GrassGenerationParams params;
+};
+
+layout(std140, set = 2, binding = 1) uniform uCamera {
+    CameraBinding camera;
 };
 
 layout(set = 0, binding = 0) readonly buffer ChunkInstances {
     ChunkInstance Chunks[];
 };
 
-layout(set = 1, binding = 0) writeonly buffer VisibleChunks {
-    uint VisibleChunkIndices[];
+layout(set = 1, binding = 0) writeonly buffer VisibleChunkIndices {
+    uint VisibleChunks[];
 };
 
 void main() {
-    if (gl_LocalInvocationID.x >= params.grass_per_chunk ||
-            gl_LocalInvocationID.y >= params.grass_per_chunk) {
+    // Each invocation processes a single chunk
+    uint chunk_idx = gl_GlobalInvocationID.x + (gl_GlobalInvocationID.y * params.terrain_width);
+
+    if (chunk_idx >= params.terrain_width*params.terrain_width) {
         return;
     }
 
-    // Each workgroup processes a single terrain chunk for now
-    uint chunk_idx = gl_WorkGroupID.x + (gl_WorkGroupID.y * params.terrain_width);
-    if (gl_LocalInvocationIndex == 0) {
-        VisibleChunkIndices[chunk_idx] = chunk_idx;
-    }
+    // for now, just write the chunk's own index to debug
+    VisibleChunks[chunk_idx] = chunk_idx;
 }

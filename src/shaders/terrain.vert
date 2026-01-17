@@ -19,6 +19,10 @@ layout(std430, set = 0, binding = 1) readonly buffer InstanceBuffer {
     ChunkInstance Instances[];
 };
 
+layout(std430, set = 0, binding = 2) readonly buffer VisibleChunkIndices {
+    uint VisibleChunks[];
+};
+
 layout(std140, set = 1, binding = 0) uniform uCamera {
     CameraBinding camera;
 };
@@ -84,9 +88,12 @@ void main()
     OutFragPos = world_pos.xyz;
     gl_Position = camera.viewproj * world_pos;
     if (highlight_chunks != 0) {
-        OutFragColor = vec3(vert.position.x + .5f, .2f, vert.position.z + .5f);
-        // OutFragColor = vec3(uv.x, .2f, uv.y);
-        return;
+        // asserts buffer is written to properly:
+        if (VisibleChunks[gl_VertexIndex] == gl_VertexIndex) {
+            OutFragColor = vec3(vert.position.x + .5f, .2f, vert.position.z + .5f);
+            return;
+        }
+        OutFragColor = vec3(0.f, 0.f, 0.f);
     }
     OutFragColor = terrain_color.xyz * (height * .75f + .25f);
 }

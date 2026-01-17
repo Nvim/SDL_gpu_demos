@@ -155,6 +155,9 @@ GrassProgram::Init()
   return true;
 }
 
+static u64 prev_grassblades_size = 0;
+static u64 prev_chunks_size = 0;
+static u64 prev_visible_chunks_size = 0;
 bool
 GrassProgram::GenerateGrassblades()
 {
@@ -166,12 +169,11 @@ GrassProgram::GenerateGrassblades()
   auto total_chunks = p.terrain_width * p.terrain_width;
 
   { // resize storage buffers if needed
-    static u64 prev_grassblades_size = 0;
-    static u64 prev_chunks_size = 0;
 
     u32 new_grassblades_size =
       blades_per_chunk * total_chunks * GRASS_INSTANCE_SZ;
     u32 new_chunks_size = total_chunks * CHUNK_INSTANCE_SZ;
+    u32 new_visible_chunks_size = total_chunks * sizeof(u32);
 
     const auto resize_buffer =
       [&](SDL_GPUBuffer** buf, u64 new_size, u64& prev_size) -> bool {
@@ -208,10 +210,10 @@ GrassProgram::GenerateGrassblades()
       LOG_ERROR("Couldn't resize chunks buffer");
       return false;
     }
-
-    // Also resize visible chunks buffer:
-    if (!resize_buffer(&visible_chunks_, new_chunks_size, prev_chunks_size)) {
-      LOG_ERROR("Couldn't resize visible chunks buffer");
+    if (!resize_buffer(&visible_chunks_,
+                       new_visible_chunks_size,
+                       prev_visible_chunks_size)) {
+      LOG_ERROR("Couldn't resize visible chunks buffers");
       return false;
     }
   }
@@ -245,6 +247,44 @@ GrassProgram::GenerateGrassblades()
     }
   }
 
+  return true;
+}
+
+static u32 cull_dispatch_sz{ 0 };
+bool
+GrassProgram::CullChunks(CameraBinding& camera)
+{
+  SDL_GPUStorageBufferReadWriteBinding bindings[1];
+  {
+    bindings[0].buffer = visible_chunks_;
+    bindings[0].cycle = false;
+  }
+
+  SDL_GPUCommandBuffer* cmd_buf = SDL_AcquireGPUCommandBuffer(Device);
+  if (cmd_buf == NULL) {
+    LOG_ERROR("Couldn't acquire command buffer: {}", GETERR);
+    return false;
+  }
+  auto* pass = SDL_BeginGPUComputePass(cmd_buf, nullptr, 0, bindings, 1);
+  SDL_BindGPUComputePipeline(pass, cull_chunks_pipeline_);
+
+  SDL_BindGPUComputeStorageBuffers(pass, 0, &chunk_instances_, 1);
+  SDL_BindGPUComputeStorageBuffers(pass, 1, &visible_chunks_, 1);
+
+  SDL_PushGPUComputeUniformData(
+    cmd_buf, 0, &grass_gen_params_, sizeof(GrassGenerationParams));
+  SDL_PushGPUComputeUniformData(cmd_buf, 1, &camera, sizeof(camera));
+
+  static constexpr f32 local_size = 16; // match in shader
+  // const u32
+  cull_dispatch_sz = std::ceil(grass_gen_params_.terrain_width / local_size);
+  SDL_DispatchGPUCompute(pass, cull_dispatch_sz, cull_dispatch_sz, 1);
+
+  SDL_EndGPUComputePass(pass);
+  if (!SDL_SubmitGPUCommandBuffer(cmd_buf)) {
+    LOG_ERROR("Instance buffer generation failed: {}", GETERR);
+    return false;
+  }
   return true;
 }
 
@@ -310,6 +350,9 @@ GrassProgram::Draw()
 
     SDL_SetGPUViewport(scene_pass, &scene_vp);
 
+    if (true) {
+      CullChunks(camera_bind);
+    }
     if (draw_grass_) {
       DrawGrass(scene_pass, cmdbuf, camera_bind);
     }
@@ -383,6 +426,7 @@ GrassProgram::DrawTerrain(SDL_GPURenderPass* pass,
 
   SDL_BindGPUVertexSamplers(pass, 0, &b, 1);
   SDL_BindGPUVertexStorageBuffers(pass, 0, &chunk_instances_, 1);
+  SDL_BindGPUVertexStorageBuffers(pass, 1, &visible_chunks_, 1);
   SDL_PushGPUVertexUniformData(cmdbuf, 0, &camera, sizeof(camera));
   SDL_PushGPUVertexUniformData(
     cmdbuf, 1, &terrain_params_, sizeof(terrain_params_));
@@ -520,7 +564,7 @@ GrassProgram::CreateGraphicsPipelines()
   }
 
   { // Terrain
-    auto vert = LoadShader(TERRAIN_VS_PATH, Device, 1, 2, 1, 0);
+    auto vert = LoadShader(TERRAIN_VS_PATH, Device, 1, 2, 2, 0);
     if (vert == nullptr) {
       LOG_ERROR("Couldn't load vertex shader at path {}", TERRAIN_VS_PATH);
       return false;
@@ -678,6 +722,11 @@ GrassProgram::DrawGui()
                 p.grass_per_chunk * p.grass_per_chunk * p.terrain_width *
                   p.terrain_width);
     ImGui::Text("Total chunks: %d", p.terrain_width * p.terrain_width);
+    ImGui::Text(
+      "Cull workgroup size: %ux%u", cull_dispatch_sz, cull_dispatch_sz);
+    ImGui::Text("Grassblades buffer size: %lu", prev_grassblades_size);
+    ImGui::Text("Chunks buffer size: %lu", prev_chunks_size);
+    ImGui::Text("Visible chunks buffer size: %lu", prev_visible_chunks_size);
     ImGui::End();
   }
   if (ImGui::Begin("Settings")) {
