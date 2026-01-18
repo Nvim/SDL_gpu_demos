@@ -74,6 +74,7 @@ GrassProgram::~GrassProgram()
   RELEASE_IF(chunk_indices_, SDL_ReleaseGPUBuffer);
   RELEASE_IF(chunk_instances_, SDL_ReleaseGPUBuffer);
   RELEASE_IF(visible_chunks_, SDL_ReleaseGPUBuffer);
+  RELEASE_IF(draw_calls_, SDL_ReleaseGPUBuffer);
 
   RELEASE_IF(depth_target_, SDL_ReleaseGPUTexture);
   RELEASE_IF(scene_target_, SDL_ReleaseGPUTexture);
@@ -151,6 +152,28 @@ GrassProgram::Init()
     LOG_CRITICAL("Couldn't create grassblades");
     return false;
   }
+
+  // Indirect draws buffer:
+  SDL_GPUBufferCreateInfo buf_info{};
+  {
+    // NOTE:
+    // We only draw 1 instanced quad, so buffer's size should be
+    // 1*DrawIndirectCommand. However, the SDL_GPUIndirectDrawCommand is smaller
+    // than Vulkan's vkCmdDrawIndexedIndirect, so we clamp to this value to
+    // avoid validation error.
+    buf_info.size = std::max(20lu, sizeof(SDL_GPUIndirectDrawCommand));
+    buf_info.usage = SDL_GPU_BUFFERUSAGE_INDIRECT;
+  }
+  draw_calls_ = SDL_CreateGPUBuffer(Device, &buf_info);
+  if (!draw_calls_) {
+    LOG_ERROR("Couldn't create indirect buffer: {}", GETERR);
+    return false;
+  }
+
+  SDL_GPUIndirectDrawCommand draw_cmd{};
+  std::memset(&draw_cmd, 0, sizeof(draw_cmd));
+
+  EnginePtr->UploadToBuffer(draw_calls_, &draw_cmd, 1);
 
   return true;
 }
@@ -234,8 +257,6 @@ GrassProgram::GenerateGrassblades()
     }
     auto* pass = SDL_BeginGPUComputePass(cmd_buf, nullptr, 0, bindings, 2);
     SDL_BindGPUComputePipeline(pass, generate_grass_pipeline_);
-    SDL_BindGPUComputeStorageBuffers(pass, 0, &grassblade_instances_, 1);
-    SDL_BindGPUComputeStorageBuffers(pass, 1, &chunk_instances_, 1);
     SDL_PushGPUComputeUniformData(
       cmd_buf, 0, &grass_gen_params_, sizeof(GrassGenerationParams));
     SDL_PushGPUComputeUniformData(cmd_buf, 1, &lastTime, sizeof(lastTime));
@@ -254,10 +275,12 @@ static u32 cull_dispatch_sz{ 0 };
 bool
 GrassProgram::CullChunks(CameraBinding& camera)
 {
-  SDL_GPUStorageBufferReadWriteBinding bindings[1];
+  SDL_GPUStorageBufferReadWriteBinding bindings[2];
   {
     bindings[0].buffer = visible_chunks_;
     bindings[0].cycle = false;
+    bindings[1].buffer = draw_calls_;
+    bindings[1].cycle = false;
   }
 
   SDL_GPUCommandBuffer* cmd_buf = SDL_AcquireGPUCommandBuffer(Device);
@@ -265,14 +288,12 @@ GrassProgram::CullChunks(CameraBinding& camera)
     LOG_ERROR("Couldn't acquire command buffer: {}", GETERR);
     return false;
   }
-  auto* pass = SDL_BeginGPUComputePass(cmd_buf, nullptr, 0, bindings, 1);
+  auto* pass = SDL_BeginGPUComputePass(cmd_buf, nullptr, 0, bindings, 2);
   SDL_BindGPUComputePipeline(pass, cull_chunks_pipeline_);
 
   SDL_BindGPUComputeStorageBuffers(pass, 0, &chunk_instances_, 1);
-  SDL_BindGPUComputeStorageBuffers(pass, 1, &visible_chunks_, 1);
-
   SDL_PushGPUComputeUniformData(
-    cmd_buf, 0, &grass_gen_params_, sizeof(GrassGenerationParams));
+    cmd_buf, 0, &terrain_params_, sizeof(terrain_params_));
   SDL_PushGPUComputeUniformData(cmd_buf, 1, &camera, sizeof(camera));
 
   static constexpr f32 local_size = 16; // match in shader
@@ -347,11 +368,15 @@ GrassProgram::Draw()
       .camera_model = camera_.Model(),
       .camera_world = glm::vec4{ camera_.Position, 1.f },
     };
+    static CameraBinding cull_camera_bind{ camera_bind };
+    if (!freeze_cull_camera) {
+      cull_camera_bind = camera_bind;
+    }
 
     SDL_SetGPUViewport(scene_pass, &scene_vp);
 
     if (true) {
-      CullChunks(camera_bind);
+      CullChunks(cull_camera_bind);
     }
     if (draw_grass_) {
       DrawGrass(scene_pass, cmdbuf, camera_bind);
@@ -437,7 +462,8 @@ GrassProgram::DrawTerrain(SDL_GPURenderPass* pass,
 
   auto& p = grass_gen_params_;
   auto total_chunks = p.terrain_width * p.terrain_width;
-  SDL_DrawGPUIndexedPrimitives(pass, 6, total_chunks, 0, 0, 0);
+  // SDL_DrawGPUIndexedPrimitives(pass, 6, total_chunks, 0, 0, 0);
+  SDL_DrawGPUIndexedPrimitivesIndirect(pass, draw_calls_, 0, 1);
 }
 
 bool
@@ -610,13 +636,13 @@ GrassProgram::CreateComputePipelines()
     return false;
   }
 
-  cull_chunks_pipeline_ =
-    builder                              //
-      .SetReadOnlyStorageBufferCount(1)  // Read chunks
-      .SetReadWriteStorageBufferCount(1) // Write visible chunks
-      .SetUBOCount(1)
-      .SetShader(CULL_COMP_PATH)
-      .Build(Device);
+  cull_chunks_pipeline_ = builder                             //
+                            .SetReadOnlyStorageBufferCount(1) // Read chunks
+                            .SetReadWriteStorageBufferCount(
+                              2) // Write visible chunks + Indirect buffer
+                            .SetUBOCount(2)
+                            .SetShader(CULL_COMP_PATH)
+                            .Build(Device);
 
   if (cull_chunks_pipeline_ == nullptr) {
     LOG_ERROR("Couldn't create cull_chunks pipeline: {}", GETERR);
@@ -730,6 +756,7 @@ GrassProgram::DrawGui()
     ImGui::End();
   }
   if (ImGui::Begin("Settings")) {
+    ImGui::Checkbox("Freeze culling camera", &freeze_cull_camera);
     if (ImGui::TreeNode("Viewport")) {
       ImGui::Text("Window Width: %d", window_w_);
       ImGui::Text("Window Height: %d", window_h_);

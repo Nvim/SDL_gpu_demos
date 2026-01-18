@@ -89,11 +89,12 @@ void main()
     gl_Position = camera.viewproj * world_pos;
     if (highlight_chunks != 0) {
         // asserts buffer is written to properly:
-        if (VisibleChunks[gl_VertexIndex] == gl_VertexIndex) {
+        if (VisibleChunks[gl_InstanceIndex] == 8) {
             OutFragColor = vec3(vert.position.x + .5f, .2f, vert.position.z + .5f);
-            return;
+        } else {
+            OutFragColor = vec3(1.f, 0.f, 0.f);
         }
-        OutFragColor = vec3(0.f, 0.f, 0.f);
+        return;
     }
     OutFragColor = terrain_color.xyz * (height * .75f + .25f);
 }

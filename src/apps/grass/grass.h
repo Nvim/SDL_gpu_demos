@@ -82,6 +82,7 @@ private:
   bool quit_{ false };
   bool draw_terrain_{ true };
   bool draw_grass_{ false };
+  bool freeze_cull_camera{ false };
   i32 window_w_;
   i32 window_h_;
   i32 rendertarget_w_;
@@ -132,6 +133,8 @@ private:
   SDL_GPUBuffer* chunk_indices_{ nullptr };
   SDL_GPUBuffer* chunk_instances_{ nullptr };
   SDL_GPUBuffer* visible_chunks_{ nullptr };
+
+  SDL_GPUBuffer* draw_calls_{ nullptr };
 };
 
 } // namespace grass

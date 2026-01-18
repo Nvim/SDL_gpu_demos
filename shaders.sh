@@ -26,6 +26,7 @@ if [[ $# -eq 1 && -n $1 ]]; then
       "grid.frag"
       "grass.frag"
       "generate_grass.comp"
+      "cull_chunks.comp"
       ) 
   fi
 
