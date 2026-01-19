@@ -62,7 +62,7 @@ const Vertex Quad[4] = Vertex[4](
 void main()
 {
     Vertex vert = Quad[gl_VertexIndex];
-    ChunkInstance instance = Instances[gl_InstanceIndex];
+    ChunkInstance instance = Instances[VisibleChunks[gl_InstanceIndex]];
 
     float w = instance.world_translation.x;
     float h = instance.world_translation.y;
@@ -88,12 +88,7 @@ void main()
     OutFragPos = world_pos.xyz;
     gl_Position = camera.viewproj * world_pos;
     if (highlight_chunks != 0) {
-        // asserts buffer is written to properly:
-        if (VisibleChunks[gl_InstanceIndex] == 8) {
-            OutFragColor = vec3(vert.position.x + .5f, .2f, vert.position.z + .5f);
-        } else {
-            OutFragColor = vec3(1.f, 0.f, 0.f);
-        }
+        OutFragColor = vec3(vert.position.x + .5f, .2f, vert.position.z + .5f);
         return;
     }
     OutFragColor = terrain_color.xyz * (height * .75f + .25f);

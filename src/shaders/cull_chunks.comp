@@ -9,9 +9,9 @@
 layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 
 struct IndirectDraw {
-    uint num_vertices;   /**< The number of vertices to draw. */
-    uint num_instances;  /**< The number of instances to draw. */
-    uint first_vertex;   /**< The index of the first vertex to draw. */
+    uint num_vertices; /**< The number of vertices to draw. */
+    uint num_instances; /**< The number of instances to draw. */
+    uint first_vertex; /**< The index of the first vertex to draw. */
     uint first_instance; /**< The ID of the first instance to draw. */
 };
 
@@ -43,36 +43,36 @@ layout(set = 1, binding = 1) writeonly buffer IndirectDrawsBuffer {
 // https://github.com/KhronosGroup/Vulkan-Samples/blob/main/samples/performance/multi_draw_indirect/multi_draw_indirect.cpp
 bool check_is_visible(mat4 mat, vec3 origin, float radius)
 {
-	uint plane_index = 0;
-	for (uint i = 0; i < 3; ++i)
-	{
-		for (uint j = 0; j < 2; ++j, ++plane_index)
-		{
-			if (plane_index == 2 || plane_index == 3)
-			{
-				continue;
-			}
-			const float sign  = (j > 0) ? 1.f : -1.f;
-			vec4        plane = vec4(0, 0, 0, 0);
-			for (uint k = 0; k < 4; ++k)
-			{
-				plane[k] = mat[k][3] + sign * mat[k][i];
-			}
-			plane.xyzw /= sqrt(dot(plane.xyz, plane.xyz));
-			if (dot(origin, plane.xyz) + plane.w + radius < 0)
-			{
-				return false;
-			}
-		}
-	}
-	return true;
+    uint plane_index = 0;
+    for (uint i = 0; i < 3; ++i)
+    {
+        for (uint j = 0; j < 2; ++j, ++plane_index)
+        {
+            if (plane_index == 2 || plane_index == 3)
+            {
+                continue;
+            }
+            const float sign = (j > 0) ? 1.f : -1.f;
+            vec4 plane = vec4(0, 0, 0, 0);
+            for (uint k = 0; k < 4; ++k)
+            {
+                plane[k] = mat[k][3] + sign * mat[k][i];
+            }
+            plane.xyzw /= sqrt(dot(plane.xyz, plane.xyz));
+            if (dot(origin, plane.xyz) + plane.w + radius < 0)
+            {
+                return false;
+            }
+        }
+    }
+    return true;
 }
 
 void main() {
     // Each invocation processes a single chunk
     uint chunk_idx = gl_GlobalInvocationID.x + (gl_GlobalInvocationID.y * terrain_width);
 
-    uint max_instances = terrain_width*terrain_width;
+    uint max_instances = terrain_width * terrain_width;
     if (chunk_idx >= max_instances) {
         return;
     }
@@ -84,13 +84,11 @@ void main() {
     float world_scale = float(world_size) / float(terrain_width);
 
     // Chunks are 0.5*0.5 in local space.
-    float chunk_radius = .5f * world_scale; 
+    float chunk_radius = .5f * world_scale * 1.5f;
     vec3 chunk_translation = vec3(w * world_scale, 0.f, h * world_scale);
 
-    bool visible = check_is_visible(camera.viewproj, chunk_translation, chunk_radius);
-
-    // for now, just write the chunk's own index to debug
-    VisibleChunks[chunk_idx] = visible ? 8 : 0;
-    IndirectDraws[0].num_instances = max_instances;
-    IndirectDraws[0].num_vertices = max_instances*4; // quad
+    if (check_is_visible(camera.viewproj, chunk_translation, chunk_radius)) {
+        uint i = atomicAdd(IndirectDraws[0].num_instances, 1);
+        VisibleChunks[i] = chunk_idx;
+    }
 }

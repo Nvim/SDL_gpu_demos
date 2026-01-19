@@ -172,6 +172,7 @@ GrassProgram::Init()
 
   SDL_GPUIndirectDrawCommand draw_cmd{};
   std::memset(&draw_cmd, 0, sizeof(draw_cmd));
+  draw_cmd.num_vertices = 6;
 
   EnginePtr->UploadToBuffer(draw_calls_, &draw_cmd, 1);
 
@@ -399,8 +400,17 @@ GrassProgram::Draw()
     SDL_EndGPURenderPass(screen_pass);
   }
 
-  if (!SDL_SubmitGPUCommandBuffer(cmdbuf)) {
-    LOG_ERROR("Couldn't submit command buffer: {}", GETERR)
+  auto fence = SDL_SubmitGPUCommandBufferAndAcquireFence(cmdbuf);
+  if (!fence) {
+    LOG_ERROR("couldn't acquire submit fence: {}", GETERR);
+    return false;
+  }
+  SDL_WaitForGPUFences(Device, true, &fence, 1);
+  SDL_GPUIndirectDrawCommand draw_cmd{};
+  std::memset(&draw_cmd, 0, sizeof(draw_cmd));
+  draw_cmd.num_vertices = 6;
+  if (!EnginePtr->UploadToBuffer(draw_calls_, &draw_cmd, 1)) {
+    LOG_ERROR("couldn't reset draw buffer: {}", GETERR);
     return false;
   }
   return true;
