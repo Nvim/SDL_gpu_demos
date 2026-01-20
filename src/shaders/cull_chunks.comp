@@ -71,6 +71,11 @@ bool check_is_visible(mat4 mat, vec3 origin, float radius)
 void main() {
     // Each invocation processes a single chunk
     uint chunk_idx = gl_GlobalInvocationID.x + (gl_GlobalInvocationID.y * terrain_width);
+    if (chunk_idx == 0) {
+        IndirectDraws[0].num_instances=0;
+    }
+    barrier();
+    memoryBarrierShared();
 
     uint max_instances = terrain_width * terrain_width;
     if (chunk_idx >= max_instances) {
@@ -84,7 +89,7 @@ void main() {
     float world_scale = float(world_size) / float(terrain_width);
 
     // Chunks are 0.5*0.5 in local space.
-    float chunk_radius = .5f * world_scale * 1.5f;
+    float chunk_radius = world_scale;
     vec3 chunk_translation = vec3(w * world_scale, 0.f, h * world_scale);
 
     if (check_is_visible(camera.viewproj, chunk_translation, chunk_radius)) {
