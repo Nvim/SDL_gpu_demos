@@ -88,7 +88,8 @@ void main()
     OutFragPos = world_pos.xyz;
     gl_Position = camera.viewproj * world_pos;
     if (highlight_chunks != 0) {
-        OutFragColor = vec3(vert.position.x + .5f, .2f, vert.position.z + .5f);
+        // OutFragColor = vec3(vert.position.x + .5f, .2f, vert.position.z + .5f);
+        OutFragColor = vec3(uv.x, .0f, uv.y );
         return;
     }
     OutFragColor = terrain_color.xyz * (height * .75f + .25f);

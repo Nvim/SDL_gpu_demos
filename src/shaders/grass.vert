@@ -31,6 +31,10 @@ layout(std430, set = 0, binding = 3) readonly buffer ChunkInstanceBuffer {
     ChunkInstance ChunkInstances[];
 };
 
+layout(std430, set = 0, binding = 4) readonly buffer VisibleGrassBuffer {
+    uint VisibleGrassblades[];
+};
+
 layout(std140, set = 1, binding = 0) uniform uCamera {
     CameraBinding camera;
 };
@@ -78,7 +82,8 @@ const vec3 base_color = vec3(.19f, .44f, .12f);
 void main()
 {
     Vertex vert = Vertices[gl_VertexIndex];
-    GrassInstance grass_instance = GrassInstances[gl_InstanceIndex];
+    // GrassInstance grass_instance = GrassInstances[gl_InstanceIndex];
+    GrassInstance grass_instance = GrassInstances[VisibleGrassblades[gl_InstanceIndex]];
     ChunkInstance chunk = ChunkInstances[grass_instance.chunk_index];
 
     float world_scale = float(world_size) / float(terrain_width);
@@ -97,7 +102,6 @@ void main()
     mat4 mat_model = mat_translate;
     mat_model *= rotateY(grass_instance.rotation);
     vec4 world_pos = mat_model * vec4(vert.position, 1.0);
-
     OutFragPos = world_pos.xyz;
     OutViewPos = camera.world_pos.xyz;
     OutNormal = mat3(transpose(inverse(mat_model))) * vert.normal;

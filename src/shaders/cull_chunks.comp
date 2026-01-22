@@ -9,9 +9,10 @@
 layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 
 struct IndirectDraw {
-    uint num_vertices; /**< The number of vertices to draw. */
-    uint num_instances; /**< The number of instances to draw. */
-    uint first_vertex; /**< The index of the first vertex to draw. */
+    uint num_indices;    /**< The number of indices to draw per instance. */
+    uint num_instances;  /**< The number of instances to draw. */
+    uint first_index;    /**< The base index within the index buffer. */
+    uint vertex_offset;  /**< The value added to the vertex index before indexing into the vertex buffer. */
     uint first_instance; /**< The ID of the first instance to draw. */
 };
 
@@ -35,7 +36,11 @@ layout(set = 1, binding = 0) writeonly buffer VisibleChunkIndices {
     uint VisibleChunks[];
 };
 
-layout(set = 1, binding = 1) writeonly buffer IndirectDrawsBuffer {
+layout(set = 1, binding = 1) writeonly buffer VisibleGrassbladesIndices {
+    uint VisibleGrassblades[];
+};
+
+layout(set = 1, binding = 2) writeonly buffer IndirectDrawsBuffer {
     IndirectDraw IndirectDraws[];
 };
 
@@ -70,9 +75,13 @@ bool check_is_visible(mat4 mat, vec3 origin, float radius)
 
 void main() {
     // Each invocation processes a single chunk
-    uint chunk_idx = gl_GlobalInvocationID.x + (gl_GlobalInvocationID.y * terrain_width);
+    uint chunk_y = gl_GlobalInvocationID.y;
+    uint chunk_x = gl_GlobalInvocationID.x;
+    uint chunk_idx = chunk_x + (chunk_y * terrain_width);
+
     if (chunk_idx == 0) {
         IndirectDraws[0].num_instances=0;
+        IndirectDraws[1].num_instances=0;
     }
     barrier();
     memoryBarrierShared();
@@ -95,5 +104,13 @@ void main() {
     if (check_is_visible(camera.viewproj, chunk_translation, chunk_radius)) {
         uint i = atomicAdd(IndirectDraws[0].num_instances, 1);
         VisibleChunks[i] = chunk_idx;
+        uint j = atomicAdd(IndirectDraws[1].num_instances, 256);
+        for(uint k = 0; k < 256; k++) {
+            uint y = k % 16;
+            uint x = k / 16;
+            x += (chunk_x*16);
+            y += (chunk_y*16);
+            VisibleGrassblades[j++] = y*256 + x;
+        }
     }
 }

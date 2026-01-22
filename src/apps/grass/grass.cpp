@@ -74,6 +74,7 @@ GrassProgram::~GrassProgram()
   RELEASE_IF(chunk_indices_, SDL_ReleaseGPUBuffer);
   RELEASE_IF(chunk_instances_, SDL_ReleaseGPUBuffer);
   RELEASE_IF(visible_chunks_, SDL_ReleaseGPUBuffer);
+  RELEASE_IF(visible_grassblades_, SDL_ReleaseGPUBuffer);
   RELEASE_IF(draw_calls_, SDL_ReleaseGPUBuffer);
 
   RELEASE_IF(depth_target_, SDL_ReleaseGPUTexture);
@@ -154,14 +155,25 @@ GrassProgram::Init()
   }
 
   // Indirect draws buffer:
+  static const std::array<SDL_GPUIndexedIndirectDrawCommand, 2> draw_cmds{
+    SDL_GPUIndexedIndirectDrawCommand{
+      .num_indices = 6,
+      .num_instances = 0,
+      .first_index = 0,
+      .vertex_offset = 0,
+      .first_instance = 0,
+    },
+    SDL_GPUIndexedIndirectDrawCommand{
+      .num_indices = grassblade_index_count_,
+      .num_instances = 0,
+      .first_index = 0,
+      .vertex_offset = 0,
+      .first_instance = 0,
+    },
+  };
   SDL_GPUBufferCreateInfo buf_info{};
   {
-    // NOTE:
-    // We only draw 1 instanced quad, so buffer's size should be
-    // 1*DrawIndirectCommand. However, the SDL_GPUIndirectDrawCommand is smaller
-    // than Vulkan's vkCmdDrawIndexedIndirect, so we clamp to this value to
-    // avoid validation error.
-    buf_info.size = std::max(20lu, sizeof(SDL_GPUIndirectDrawCommand));
+    buf_info.size = sizeof(draw_cmds);
     buf_info.usage = SDL_GPU_BUFFERUSAGE_INDIRECT;
   }
   draw_calls_ = SDL_CreateGPUBuffer(Device, &buf_info);
@@ -170,11 +182,7 @@ GrassProgram::Init()
     return false;
   }
 
-  SDL_GPUIndirectDrawCommand draw_cmd{};
-  std::memset(&draw_cmd, 0, sizeof(draw_cmd));
-  draw_cmd.num_vertices = 6;
-
-  EnginePtr->UploadToBuffer(draw_calls_, &draw_cmd, 1);
+  EnginePtr->UploadToBuffer(draw_calls_, draw_cmds.data(), 2);
 
   return true;
 }
@@ -182,6 +190,7 @@ GrassProgram::Init()
 static u64 prev_grassblades_size = 0;
 static u64 prev_chunks_size = 0;
 static u64 prev_visible_chunks_size = 0;
+static u64 prev_visible_grassblades_size = 0;
 bool
 GrassProgram::GenerateGrassblades()
 {
@@ -198,6 +207,8 @@ GrassProgram::GenerateGrassblades()
       blades_per_chunk * total_chunks * GRASS_INSTANCE_SZ;
     u32 new_chunks_size = total_chunks * CHUNK_INSTANCE_SZ;
     u32 new_visible_chunks_size = total_chunks * sizeof(u32);
+    u32 new_visible_grassblades_size =
+      total_chunks * blades_per_chunk * sizeof(u32);
 
     const auto resize_buffer =
       [&](SDL_GPUBuffer** buf, u64 new_size, u64& prev_size) -> bool {
@@ -240,6 +251,12 @@ GrassProgram::GenerateGrassblades()
       LOG_ERROR("Couldn't resize visible chunks buffers");
       return false;
     }
+    if (!resize_buffer(&visible_grassblades_,
+                       new_visible_grassblades_size,
+                       prev_visible_grassblades_size)) {
+      LOG_ERROR("Couldn't resize visible grassblades buffers");
+      return false;
+    }
   }
 
   { // Dispatch compute
@@ -276,12 +293,14 @@ static u32 cull_dispatch_sz{ 0 };
 bool
 GrassProgram::CullChunks(CameraBinding& camera)
 {
-  SDL_GPUStorageBufferReadWriteBinding bindings[2];
+  SDL_GPUStorageBufferReadWriteBinding bindings[3];
   {
     bindings[0].buffer = visible_chunks_;
     bindings[0].cycle = false;
-    bindings[1].buffer = draw_calls_;
+    bindings[1].buffer = visible_grassblades_;
     bindings[1].cycle = false;
+    bindings[2].buffer = draw_calls_;
+    bindings[2].cycle = false;
   }
 
   SDL_GPUCommandBuffer* cmd_buf = SDL_AcquireGPUCommandBuffer(Device);
@@ -289,7 +308,7 @@ GrassProgram::CullChunks(CameraBinding& camera)
     LOG_ERROR("Couldn't acquire command buffer: {}", GETERR);
     return false;
   }
-  auto* pass = SDL_BeginGPUComputePass(cmd_buf, nullptr, 0, bindings, 2);
+  auto* pass = SDL_BeginGPUComputePass(cmd_buf, nullptr, 0, bindings, 3);
   SDL_BindGPUComputePipeline(pass, cull_chunks_pipeline_);
 
   SDL_BindGPUComputeStorageBuffers(pass, 0, &chunk_instances_, 1);
@@ -425,12 +444,13 @@ GrassProgram::DrawGrass(SDL_GPURenderPass* pass,
   static const SDL_GPUTextureSamplerBinding b{ noise_texture_, noise_sampler_ };
   static const SDL_GPUBufferBinding grass_idx_bind{ grassblade_indices_, 0 };
 
+  SDL_GPUBuffer* buffers[4]{
+    grassblade_vertices_, grassblade_instances_, chunk_instances_, visible_grassblades_
+  };
   SDL_BindGPUGraphicsPipeline(pass, grass_pipeline_);
 
   SDL_BindGPUVertexSamplers(pass, 0, &b, 1);
-  SDL_BindGPUVertexStorageBuffers(pass, 0, &grassblade_vertices_, 1);
-  SDL_BindGPUVertexStorageBuffers(pass, 1, &grassblade_instances_, 1);
-  SDL_BindGPUVertexStorageBuffers(pass, 2, &chunk_instances_, 1);
+  SDL_BindGPUVertexStorageBuffers(pass, 0, buffers, 4);
   SDL_PushGPUVertexUniformData(cmdbuf, 0, &camera, sizeof(camera));
   SDL_PushGPUVertexUniformData(
     cmdbuf, 1, &terrain_params_, sizeof(terrain_params_));
@@ -443,11 +463,14 @@ GrassProgram::DrawGrass(SDL_GPURenderPass* pass,
 
   SDL_BindGPUIndexBuffer(pass, &grass_idx_bind, SDL_GPU_INDEXELEMENTSIZE_32BIT);
 
-  auto& p = grass_gen_params_;
-  auto blades_per_chunk = p.grass_per_chunk * p.grass_per_chunk;
-  auto total_chunks = p.terrain_width * p.terrain_width;
-  SDL_DrawGPUIndexedPrimitives(
-    pass, grassblade_index_count_, total_chunks * blades_per_chunk, 0, 0, 0);
+  // auto& p = grass_gen_params_;
+  // auto blades_per_chunk = p.grass_per_chunk * p.grass_per_chunk;
+  // auto total_chunks = p.terrain_width * p.terrain_width;
+  // SDL_DrawGPUIndexedPrimitives(
+  //   pass, grassblade_index_count_, total_chunks * blades_per_chunk, 0, 0, 0);
+
+  SDL_DrawGPUIndexedPrimitivesIndirect(
+    pass, draw_calls_, sizeof(SDL_GPUIndexedIndirectDrawCommand), 1);
 }
 
 void
@@ -471,9 +494,6 @@ GrassProgram::DrawTerrain(SDL_GPURenderPass* pass,
 
   SDL_BindGPUIndexBuffer(pass, &chunk_idx_bind, SDL_GPU_INDEXELEMENTSIZE_32BIT);
 
-  auto& p = grass_gen_params_;
-  auto total_chunks = p.terrain_width * p.terrain_width;
-  // SDL_DrawGPUIndexedPrimitives(pass, 6, total_chunks, 0, 0, 0);
   SDL_DrawGPUIndexedPrimitivesIndirect(pass, draw_calls_, 0, 1);
 }
 
@@ -576,7 +596,7 @@ GrassProgram::CreateGraphicsPipelines()
     .EnableDepthWrite(DEPTH_FORMAT);
 
   { // Grass
-    auto vert = LoadShader(GRASS_VS_PATH, Device, 1, 2, 3, 0);
+    auto vert = LoadShader(GRASS_VS_PATH, Device, 1, 2, 4, 0);
     if (vert == nullptr) {
       LOG_ERROR("Couldn't load vertex shader at path {}", GRASS_VS_PATH);
       return false;
@@ -649,8 +669,7 @@ GrassProgram::CreateComputePipelines()
 
   cull_chunks_pipeline_ = builder                             //
                             .SetReadOnlyStorageBufferCount(1) // Read chunks
-                            .SetReadWriteStorageBufferCount(
-                              2) // Write visible chunks + Indirect buffer
+                            .SetReadWriteStorageBufferCount(3)
                             .SetUBOCount(2)
                             .SetShader(CULL_COMP_PATH)
                             .Build(Device);

@@ -81,7 +81,7 @@ private:
 private:
   bool quit_{ false };
   bool draw_terrain_{ true };
-  bool draw_grass_{ false };
+  bool draw_grass_{ true };
   bool freeze_cull_camera{ false };
   i32 window_w_;
   i32 window_h_;
@@ -95,7 +95,7 @@ private:
     .terrain_width = 16,
     .world_size = 32,
     .heightmap_scale = 4.f,
-    .highlight_chunks = 0,
+    .highlight_chunks = 1,
     .terrain_color = { .04f, .12f, .01f, 0.f },
   };
   GrassGenerationParams grass_gen_params_{ .base_color =
@@ -108,10 +108,10 @@ private:
                                            .density = 12.f };
   FogSettings fog_settings{
     .fog_color = glm::vec3{ 0.714, 0.82, 0.871 },
-    .fog_type = FOG_EXP_SQ,
+    .fog_type = FOG_LINEAR,
     .fog_density = .75f,
-    .fog_end = 100.f,
-    .fog_start = 18.f,
+    .fog_end = 60.f,
+    .fog_start = 25.f,
   };
   bool regenerate_grass_{ false };
 
@@ -133,6 +133,7 @@ private:
   SDL_GPUBuffer* chunk_indices_{ nullptr };
   SDL_GPUBuffer* chunk_instances_{ nullptr };
   SDL_GPUBuffer* visible_chunks_{ nullptr };
+  SDL_GPUBuffer* visible_grassblades_{ nullptr };
 
   SDL_GPUBuffer* draw_calls_{ nullptr };
 };
