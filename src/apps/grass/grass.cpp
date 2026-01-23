@@ -10,6 +10,7 @@
 #include "common/pipeline_builder.h"
 #include "common/types.h"
 #include "common/util.h"
+#include "shaders/cull_chunks_settings.h"
 
 #include <glm/ext/matrix_transform.hpp>
 #include <imgui/backends/imgui_impl_sdl3.h>
@@ -303,6 +304,13 @@ GrassProgram::CullChunks(CameraBinding& camera)
     bindings[2].cycle = false;
   }
 
+  static CullChunkSettings params{};
+  {
+    params.grass_per_chunk = grass_gen_params_.grass_per_chunk;
+    params.terrain_width = grass_gen_params_.terrain_width;
+    params.world_size = terrain_params_.world_size;
+  };
+
   SDL_GPUCommandBuffer* cmd_buf = SDL_AcquireGPUCommandBuffer(Device);
   if (cmd_buf == NULL) {
     LOG_ERROR("Couldn't acquire command buffer: {}", GETERR);
@@ -312,8 +320,7 @@ GrassProgram::CullChunks(CameraBinding& camera)
   SDL_BindGPUComputePipeline(pass, cull_chunks_pipeline_);
 
   SDL_BindGPUComputeStorageBuffers(pass, 0, &chunk_instances_, 1);
-  SDL_PushGPUComputeUniformData(
-    cmd_buf, 0, &terrain_params_, sizeof(terrain_params_));
+  SDL_PushGPUComputeUniformData(cmd_buf, 0, &params, sizeof(params));
   SDL_PushGPUComputeUniformData(cmd_buf, 1, &camera, sizeof(camera));
 
   static constexpr f32 local_size = 16; // match in shader
@@ -444,9 +451,10 @@ GrassProgram::DrawGrass(SDL_GPURenderPass* pass,
   static const SDL_GPUTextureSamplerBinding b{ noise_texture_, noise_sampler_ };
   static const SDL_GPUBufferBinding grass_idx_bind{ grassblade_indices_, 0 };
 
-  SDL_GPUBuffer* buffers[4]{
-    grassblade_vertices_, grassblade_instances_, chunk_instances_, visible_grassblades_
-  };
+  SDL_GPUBuffer* buffers[4]{ grassblade_vertices_,
+                             grassblade_instances_,
+                             chunk_instances_,
+                             visible_grassblades_ };
   SDL_BindGPUGraphicsPipeline(pass, grass_pipeline_);
 
   SDL_BindGPUVertexSamplers(pass, 0, &b, 1);
@@ -824,7 +832,7 @@ GrassProgram::DrawGui()
       ImGui::Checkbox("Draw grass", &draw_grass_);
       ImGui::Checkbox("Highlight chunks", (bool*)&tp.highlight_chunks);
       ImGui::SliderInt("World size", &tp.world_size, 1, 256);
-      ImGui::SliderFloat("Heightmap scale", &tp.heightmap_scale, 1.f, 128.f);
+      ImGui::SliderFloat("Heightmap scale", &tp.heightmap_scale, 1.f, 32.f);
       ImGui::ColorEdit3("Color:", (f32*)&tp.terrain_color);
       ImGui::TreePop();
     }

@@ -95,7 +95,7 @@ private:
     .terrain_width = 16,
     .world_size = 32,
     .heightmap_scale = 4.f,
-    .highlight_chunks = 1,
+    .highlight_chunks = 0,
     .terrain_color = { .04f, .12f, .01f, 0.f },
   };
   GrassGenerationParams grass_gen_params_{ .base_color =
