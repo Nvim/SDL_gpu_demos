@@ -19,4 +19,5 @@ void main()
     float fog_fact = 1.f - getFogFactor(inFragPos, inViewPos, fog);
     vec3 color = mix(inColor, fog.fog_color, fog_fact);
     OutFragColor = vec4(color, 1.f);
+    // OutFragColor = vec4(inColor, 1.f);
 }

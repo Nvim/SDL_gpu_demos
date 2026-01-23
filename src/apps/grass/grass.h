@@ -40,6 +40,8 @@ class GrassProgram : public Program
     "resources/shaders/compiled/terrain.frag.spv";
   static constexpr const char* COMP_PATH =
     "resources/shaders/compiled/generate_grass.comp.spv";
+  static constexpr const char* CULL_COMP_PATH =
+    "resources/shaders/compiled/cull_chunks.comp.spv";
   static constexpr SDL_GPUTextureFormat TARGET_FORMAT =
     SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
   static constexpr SDL_GPUTextureFormat DEPTH_FORMAT =
@@ -64,9 +66,10 @@ private:
   bool InitGui();
   bool CreateRenderTargets();
   bool CreateGraphicsPipelines();
-  bool CreateComputePipeline();
+  bool CreateComputePipelines();
   bool UploadVertexData();
   bool GenerateGrassblades();
+  bool CullChunks(CameraBinding& camera);
   void DrawGrass(SDL_GPURenderPass* pass,
                  SDL_GPUCommandBuffer* cmdbuf,
                  CameraBinding& camera);
@@ -79,6 +82,7 @@ private:
   bool quit_{ false };
   bool draw_terrain_{ true };
   bool draw_grass_{ true };
+  bool freeze_cull_camera{ false };
   i32 window_w_;
   i32 window_h_;
   i32 rendertarget_w_;
@@ -104,10 +108,10 @@ private:
                                            .density = 12.f };
   FogSettings fog_settings{
     .fog_color = glm::vec3{ 0.714, 0.82, 0.871 },
-    .fog_type = FOG_EXP_SQ,
+    .fog_type = FOG_LINEAR,
     .fog_density = .75f,
-    .fog_end = 100.f,
-    .fog_start = 18.f,
+    .fog_end = 60.f,
+    .fog_start = 25.f,
   };
   bool regenerate_grass_{ false };
 
@@ -119,6 +123,7 @@ private:
   SDL_GPUGraphicsPipeline* grass_pipeline_{ nullptr };
   SDL_GPUGraphicsPipeline* terrain_pipeline_{ nullptr };
   SDL_GPUComputePipeline* generate_grass_pipeline_{ nullptr };
+  SDL_GPUComputePipeline* cull_chunks_pipeline_{ nullptr };
   SDL_GPUColorTargetInfo scene_color_target_info_{};
   SDL_GPUDepthStencilTargetInfo scene_depth_target_info_{};
   SDL_GPUColorTargetInfo swapchain_target_info_{};
@@ -127,6 +132,10 @@ private:
   SDL_GPUBuffer* grassblade_instances_{ nullptr };
   SDL_GPUBuffer* chunk_indices_{ nullptr };
   SDL_GPUBuffer* chunk_instances_{ nullptr };
+  SDL_GPUBuffer* visible_chunks_{ nullptr };
+  SDL_GPUBuffer* visible_grassblades_{ nullptr };
+
+  SDL_GPUBuffer* draw_calls_{ nullptr };
 };
 
 } // namespace grass

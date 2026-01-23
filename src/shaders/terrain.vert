@@ -19,6 +19,10 @@ layout(std430, set = 0, binding = 1) readonly buffer InstanceBuffer {
     ChunkInstance Instances[];
 };
 
+layout(std430, set = 0, binding = 2) readonly buffer VisibleChunkIndices {
+    uint VisibleChunks[];
+};
+
 layout(std140, set = 1, binding = 0) uniform uCamera {
     CameraBinding camera;
 };
@@ -58,7 +62,7 @@ const Vertex Quad[4] = Vertex[4](
 void main()
 {
     Vertex vert = Quad[gl_VertexIndex];
-    ChunkInstance instance = Instances[gl_InstanceIndex];
+    ChunkInstance instance = Instances[VisibleChunks[gl_InstanceIndex]];
 
     float w = instance.world_translation.x;
     float h = instance.world_translation.y;
@@ -84,8 +88,8 @@ void main()
     OutFragPos = world_pos.xyz;
     gl_Position = camera.viewproj * world_pos;
     if (highlight_chunks != 0) {
-        OutFragColor = vec3(vert.position.x + .5f, .2f, vert.position.z + .5f);
-        // OutFragColor = vec3(uv.x, .2f, uv.y);
+        // OutFragColor = vec3(vert.position.x + .5f, .2f, vert.position.z + .5f);
+        OutFragColor = vec3(uv.x, .0f, uv.y );
         return;
     }
     OutFragColor = terrain_color.xyz * (height * .75f + .25f);

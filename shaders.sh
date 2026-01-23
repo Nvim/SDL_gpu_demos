@@ -19,13 +19,14 @@ if [[ $# -eq 1 && -n $1 ]]; then
 
   if [[  $1 = "grass" ]]; then 
     SHADER_LIST=(
-      "grid.vert"
+      "cull_chunks.comp"
+      "generate_grass.comp"
       "grass.vert"
       "terrain.vert"
       "terrain.frag"
-      "grid.frag"
       "grass.frag"
-      "generate_grass.comp"
+      "grid.vert"
+      "grid.frag"
       ) 
   fi
 

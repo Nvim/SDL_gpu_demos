@@ -12,8 +12,8 @@
 #include <common/logger.h>
 
 namespace {
-constexpr i32 SCREEN_WIDTH = 1600;
-constexpr i32 SCREEN_HEIGHT = 900;
+constexpr i32 SCREEN_WIDTH = 1920;
+constexpr i32 SCREEN_HEIGHT = 1080;
 }
 
 int
