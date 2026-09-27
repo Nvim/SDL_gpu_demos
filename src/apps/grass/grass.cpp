@@ -136,7 +136,7 @@ GrassProgram::Init()
     if (!ImageLoader::Load(
           noise_img,
           // "resources/textures/noise/128x128/Spokes/Spokes 10 - 128x128.png"
-          "resources/textures/noise/128x128/Manifold/Manifold 13 - 128x128.png"
+          "resources/textures/noise/128x128/Melt/Melt_03-128x128.png"
           //
           )) {
       LOG_CRITICAL("Couldn't load noise image");
@@ -274,11 +274,13 @@ GrassProgram::GenerateGrassblades()
       LOG_ERROR("Couldn't acquire command buffer: {}", GETERR);
       return false;
     }
+
+    float time = static_cast<f32>(lastTime);
     auto* pass = SDL_BeginGPUComputePass(cmd_buf, nullptr, 0, bindings, 2);
     SDL_BindGPUComputePipeline(pass, generate_grass_pipeline_);
     SDL_PushGPUComputeUniformData(
       cmd_buf, 0, &grass_gen_params_, sizeof(GrassGenerationParams));
-    SDL_PushGPUComputeUniformData(cmd_buf, 1, &lastTime, sizeof(lastTime));
+    SDL_PushGPUComputeUniformData(cmd_buf, 1, &time, sizeof(time));
     SDL_DispatchGPUCompute(pass, p.terrain_width, p.terrain_width, 1);
     SDL_EndGPUComputePass(pass);
     if (!SDL_SubmitGPUCommandBuffer(cmd_buf)) {
@@ -782,6 +784,9 @@ GrassProgram::DrawGui()
 
   if (ImGui::Begin("Stats")) {
     auto& p = grass_gen_params_;
+    ImGui::Text("Frametime: %lu ms (%u FPS)",
+                DeltaTime,
+                static_cast<u32>(1000.f / DeltaTime));
     ImGui::Text("Total grassblades: %d",
                 p.grass_per_chunk * p.grass_per_chunk * p.terrain_width *
                   p.terrain_width);

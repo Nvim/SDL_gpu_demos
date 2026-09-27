@@ -14,8 +14,8 @@ public:
   SDL_GPUDevice* Device;
   SDL_Window* Window;
   Engine* EnginePtr;
-  f32 DeltaTime{ 0.0f };
-  f32 lastTime = SDL_GetTicks();
+  u64 DeltaTime{ 0 };
+  u64 lastTime = SDL_GetTicks();
   // static inline std::shared_ptr<spdlog::logger> s_app_logger{};
 
 public:
@@ -31,7 +31,7 @@ public:
   virtual bool ShouldQuit() = 0;
   void UpdateTime()
   {
-    f32 newTimeMs = SDL_GetTicks();
+    u64 newTimeMs = SDL_GetTicks();
     DeltaTime = newTimeMs - lastTime;
     lastTime = newTimeMs;
   }
