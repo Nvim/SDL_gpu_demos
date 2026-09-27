@@ -6,6 +6,8 @@ The repository contains two (WIP) apps for now:
 - `pbr`: GLTF model viewer, with supports for _most_ features from the [GLTF PBR spec](https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html)
 - `grass`: A dense, real-time grassblade field simulation aiming to offload as much as possible to the GPU (terrain and grassblade generation, frustum culling and draw-call generation are all GPU-driven thanks to compute shaders)
 
+![](https://github.com/Nvim/SDL_gpu_demos/blob/main/grass.png)
+
 ### Common features
 
 - Minimal framework and collection of utilities to reduce boilerplate
