@@ -57,6 +57,7 @@ Use the `shaders.sh` script to build the shaders related to the app you want to 
 
 ```bash
 # TODO: add this as a CMake target someday
+./shaders.sh base
 ./shaders.sh grass
 ./shaders.sh pbr
 ```

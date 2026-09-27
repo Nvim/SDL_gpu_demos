@@ -3,6 +3,7 @@
 #include "common/types.h"
 #include <SDL3/SDL_gpu.h>
 #include <array>
+#include <span>
 
 // Only supports a single vertex buffer for now
 // TODO: take ownership of shader pointers to avoid releasing them too early

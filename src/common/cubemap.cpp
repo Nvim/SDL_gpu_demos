@@ -172,7 +172,7 @@ KtxCubemapLoader::Load(std::filesystem::path path, CubeMapUsage usage) const
       u64 offset;
       // level = mip level = 1 -> num_levels
       // layer = index in array in case of texture array. only 1 cubemap -> 0
-      result = ktxTexture_GetImageOffset(texture, 0, 0, i, &offset);
+      result = ktxTexture_GetImageOffset(texture, 0, 0, i, (unsigned long *)&offset);
       if (result != KTX_SUCCESS) {
         LOG_ERROR("Couldn't get offset for face #{}: {}", i, ERR)
         ktxTexture_Destroy(texture);

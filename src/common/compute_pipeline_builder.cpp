@@ -34,7 +34,7 @@ ComputePipelineBuilder::Build(SDL_GPUDevice* device)
     return nullptr;
   }
 
-  code_ = SDL_LoadFile(path_.c_str(), &code_size_);
+  code_ = SDL_LoadFile(path_.c_str(), (unsigned long *)&code_size_);
   if (code_ == nullptr) {
     LOG_ERROR("Couldn't load compute shader file: {}", GETERR);
     return nullptr;
